@@ -1,7 +1,7 @@
+package logic;
 import javax.swing.*;
 import java.awt.*;
 import java.util.*;
-import logic.LogicNode;
 
 /**
  * 逻辑树有向图可视化面板

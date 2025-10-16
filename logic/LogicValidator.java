@@ -26,7 +26,7 @@ public class LogicValidator {
                 break;
             case FORMULA:
                 if (parentType != null) return "FORMULA类型只能作为根节点出现";
-                if (node.children.size() != 1) return "FORMULA类型必须有且仅有一个子节点";
+                if (node.children.size() > 1) return "FORMULA类型的子节点不能超过1个";
                 break;
             default:
                 return "出现unknown节点";

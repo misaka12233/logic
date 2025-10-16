@@ -1,4 +1,4 @@
-import logic.LogicNode;
+package logic;
 import java.awt.*;
 import java.util.*;
 
