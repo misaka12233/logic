@@ -4,6 +4,7 @@ import logic.LogicGraphPanel;
 import logic.LogicNode;
 import logic.TreeHelper;
 import logic.LogicUiUtil;
+import logic.LogicValidator;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -69,8 +70,8 @@ public class CopyNodeAction implements ActionListener {
         ((DefaultTreeModel)tree.getModel()).reload();
         logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
         graphPanel.setLogicRoot(logicRoot[0]);
-    LogicUiUtil.validateAllNodes(logicRoot[0], errorNodeMap);
-    LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);
+        LogicValidator.validateAllNodes(logicRoot[0]);
+        LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);
     }
 
     private LogicNode deepCopyNode(LogicNode node) {

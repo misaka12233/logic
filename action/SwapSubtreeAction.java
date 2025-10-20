@@ -74,7 +74,7 @@ public class SwapSubtreeAction implements ActionListener {
         ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
         logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
         graphPanel.setLogicRoot(logicRoot[0]);
-        logic.LogicUiUtil.validateAllNodes(logicRoot[0], errorNodeMap);
+        logic.LogicValidator.validateAllNodes(logicRoot[0]);
         logic.LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);
     }
 }

@@ -21,29 +21,22 @@ public class LogicUiUtil {
             return;
         }
         StringBuilder sb = new StringBuilder();
+        int shown = 0;
+        int maxShow = 3;
         for (Map.Entry<Integer, String> entry : errorNodeMap.entrySet()) {
+            if (shown >= maxShow) break;
             LogicNode n = findNodeById(logicRoot, entry.getKey());
             if (n != null) {
                 sb.append(n.toString()).append(" ").append(entry.getValue()).append("\n");
+                shown++;
             }
+        }
+        int total = errorNodeMap.size();
+        if (total > maxShow) {
+            sb.append("... 等 ").append(total - maxShow).append(" 条更多错误");
         }
         if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n') sb.setLength(sb.length()-1);
         String html = "<html>" + sb.toString().replace("\n", "<br>") + "</html>";
         status.setText(html);
-    }
-
-    // 递归校验所有节点，收集所有有错误的节点及类型（每个节点只标记自身错误）
-    public static void validateAllNodes(LogicNode node, Map<Integer, String> errorNodeMap) {
-        errorNodeMap.clear();
-        validateAllNodesRec(node, null, errorNodeMap);
-    }
-    private static void validateAllNodesRec(LogicNode node, LogicNode.NodeType parentType, Map<Integer, String> errorNodeMap) {
-        String err = LogicValidator.validateNodeSelf(node, parentType);
-        if (err != null) {
-            errorNodeMap.put(node.nodeId, err);
-        }
-        for (LogicNode child : node.children) {
-            validateAllNodesRec(child, node.type, errorNodeMap);
-        }
     }
 }

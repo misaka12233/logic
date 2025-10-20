@@ -34,4 +34,28 @@ public class SwingTreeUtil {
             swingNode.add(c);
         }
     }
+    // 检查 Swing 树节点的子孙中是否存在错误节点（依据 LogicValidator.errorNodeMap）
+    static boolean swingSubtreeHasError(DefaultMutableTreeNode swingNode) {
+        for (int i = 0; i < swingNode.getChildCount(); i++) {
+            javax.swing.tree.TreeNode tn = swingNode.getChildAt(i);
+            if (!(tn instanceof DefaultMutableTreeNode)) continue;
+            DefaultMutableTreeNode child = (DefaultMutableTreeNode) tn;
+            Object uo = child.getUserObject();
+            if (uo != null) {
+                String s = uo.toString();
+                if (s.startsWith("[")) {
+                    int idx = s.indexOf("]");
+                    if (idx > 1) {
+                        try {
+                            int cid = Integer.parseInt(s.substring(1, idx));
+                            if (logic.LogicValidator.errorNodeMap.containsKey(cid)) return true;
+                        } catch (Exception ex) {
+                        }
+                    }
+                }
+            }
+            if (swingSubtreeHasError(child)) return true;
+        }
+        return false;
+    }
 }

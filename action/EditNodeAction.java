@@ -2,8 +2,7 @@ package action;
 
 import logic.*;
 import javax.swing.*;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.TreePath;
+
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.*;
@@ -124,7 +123,7 @@ public class EditNodeAction implements ActionListener {
         ((DefaultTreeModel)tree.getModel()).reload();
         logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
         graphPanel.setLogicRoot(logicRoot[0]);
-        logic.LogicUiUtil.validateAllNodes(logicRoot[0], errorNodeMap);
+        logic.LogicValidator.validateAllNodes(logicRoot[0]);
         logic.LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);
     }
 }

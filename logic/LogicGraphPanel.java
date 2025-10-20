@@ -181,21 +181,34 @@ public class LogicGraphPanel extends JPanel {
         g2.fillRoundRect(rect.x, rect.y, nodeWidth, nodeHeight, 16, 16);
         g2.setColor(Color.BLACK);
         g2.drawRoundRect(rect.x, rect.y, nodeWidth, nodeHeight, 16, 16);
-        // 节点内容：编号紫色，内容黑色
+        // 节点内容：编号蓝色，关键字紫色，其余黑色
         String text = node.toString();
         String nodeIdStr = "[" + node.nodeId + "]";
         FontMetrics fm = g2.getFontMetrics();
+        // 计算各段宽度
         int idWidth = fm.stringWidth(nodeIdStr);
-        int contentWidth = fm.stringWidth(text.startsWith(nodeIdStr) ? text.substring(nodeIdStr.length()).trim() : text);
+        String content = text.startsWith(nodeIdStr) ? text.substring(nodeIdStr.length()).trim() : text;
+        // 分词并测量宽度
+        String[] parts = content.split(" ");
+        int contentWidth = 0;
+        for (String p : parts) contentWidth += fm.stringWidth(p) + fm.stringWidth(" ");
         int totalWidth = idWidth + 4 + contentWidth;
         int tx = rect.x + (nodeWidth - totalWidth) / 2;
         int ty = rect.y + (nodeHeight + fm.getAscent() - fm.getDescent()) / 2;
-        // 编号
-        g2.setColor(new Color(128,0,128));
+        // 编号（蓝色）
+        g2.setColor(new Color(60, 120, 255));
         g2.drawString(nodeIdStr, tx, ty);
-        // 内容
-        g2.setColor(Color.BLACK);
-        g2.drawString(text.startsWith(nodeIdStr) ? text.substring(nodeIdStr.length()).trim() : text, tx + idWidth + 4, ty);
+        // 内容（逐词着色）
+        int curX = tx + idWidth + 4;
+        for (int i=0;i<parts.length;i++) {
+            String p = parts[i];
+            String clean = p.replaceAll("[^A-Za-z]", "");
+            String lower = clean.toLowerCase();
+            boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower);
+            if (isKeyword) g2.setColor(new Color(128,0,128)); else g2.setColor(Color.BLACK);
+            g2.drawString(parts[i], curX, ty);
+            curX += fm.stringWidth(parts[i]) + fm.stringWidth(" ");
+        }
         for (LogicNode child : node.children) {
             drawNodes(g, child);
         }

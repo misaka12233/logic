@@ -120,15 +120,28 @@ public class LogicGraphSvgExporter {
         int rx = 12, ry = 12;
         // 背景
         sb.append("<rect x=\"").append(rect.x).append("\" y=\"").append(rect.y).append("\" width=\"").append(nodeWidth).append("\" height=\"").append(nodeHeight).append("\" rx=\"").append(rx).append("\" ry=\"").append(ry).append("\" fill=\"white\" stroke=\"black\" stroke-width=\"1.5\"/>");
-        // 文本：编号紫色，内容黑色，同行显示
+        // 文本：编号蓝色，关键字紫色，其余黑色，同行显示
         String text = node.toString();
         String nodeIdStr = "[" + node.nodeId + "]";
         int fontSize = 14;
         String content = text;
         if (content.startsWith(nodeIdStr)) content = content.substring(nodeIdStr.length()).trim();
-        sb.append("<text x=\"").append(rect.x + nodeWidth/2).append("\" y=\"").append(rect.y + nodeHeight/2).append("\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"").append(fontSize).append("\" font-family=\"SansSerif\" fill=\"black\">");
-        sb.append("<tspan fill='purple'>").append(escapeXml(nodeIdStr)).append("</tspan> ");
-        sb.append(escapeXml(content)).append("</text>");
+        sb.append("<text x=\"").append(rect.x + nodeWidth/2).append("\" y=\"").append(rect.y + nodeHeight/2).append("\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"").append(fontSize).append("\" font-family=\"SansSerif\">\n");
+        // 编号（蓝色）居中段
+        sb.append("  <tspan fill='#3C78FF'>").append(escapeXml(nodeIdStr)).append("</tspan>");
+        sb.append("\n  ");
+        // 内容逐词输出，关键字用紫色
+        String[] parts = content.split(" ");
+        for (int i=0;i<parts.length;i++) {
+            String p = parts[i];
+            String clean = p.replaceAll("[^A-Za-z]", "");
+            String lower = clean.toLowerCase();
+            boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower);
+            if (isKeyword) sb.append("<tspan fill='purple'>").append(escapeXml(p)).append("</tspan>");
+            else sb.append("<tspan fill='black'>").append(escapeXml(p)).append("</tspan>");
+            if (i<parts.length-1) sb.append(" ");
+        }
+        sb.append("</text>");
         for (LogicNode child : node.children) {
                 drawNodes(sb, child);
         }

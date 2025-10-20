@@ -5,7 +5,6 @@ import javax.swing.tree.*;
 import javax.xml.parsers.*;
 import org.w3c.dom.*;
 import java.awt.*;
-import java.util.*;
 import action.*;
 
 /**
@@ -30,48 +29,7 @@ public class ConstraintVisualizer {
         for (LogicNode c : node.children) n.children.add(deepCopyNode(c));
         return n;
     }
-    // 递归查找nodeId对应的LogicNode
-    static LogicNode findNodeById(LogicNode node, int id) {
-        if (node.nodeId == id) return node;
-        for (LogicNode child : node.children) {
-            LogicNode res = findNodeById(child, id);
-            if (res != null) return res;
-        }
-        return null;
-    }
 
-    // 更新底部状态栏错误摘要
-    static void updateErrorStatusBar(LogicNode logicRoot, JLabel status) {
-        if (logicRoot == null || errorNodeMap.isEmpty()) {
-            status.setText("Ready");
-            return;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<Integer, String> entry : errorNodeMap.entrySet()) {
-            LogicNode n = findNodeById(logicRoot, entry.getKey());
-            if (n != null) {
-                sb.append(n.toString()).append(" ").append(entry.getValue()).append("\n");
-            }
-        }
-        if (sb.length() > 0 && sb.charAt(sb.length()-1) == '\n') sb.setLength(sb.length()-1);
-        String html = "<html>" + sb.toString().replace("\n", "<br>") + "</html>";
-        status.setText(html);
-    }
-    // 通过树节点查找对应LogicNode的nodeId（递归）
-    static Integer getNodeIdByTreeNode(DefaultMutableTreeNode treeNode, LogicNode logicNode, DefaultMutableTreeNode swingRoot) {
-        if (treeNode == swingRoot) return logicNode.nodeId;
-        // 在logicNode.children和treeNode.children中同步递归
-        int idx = swingRoot.getIndex(treeNode);
-        if (idx >= 0 && idx < logicNode.children.size()) {
-            return logicNode.children.get(idx).nodeId;
-        }
-        // 多层递归
-        for (int i = 0; i < swingRoot.getChildCount(); i++) {
-            Integer id = getNodeIdByTreeNode(treeNode, logicNode.children.get(i), (DefaultMutableTreeNode)swingRoot.getChildAt(i));
-            if (id != null) return id;
-        }
-        return null;
-    }
 
     // 自定义渲染器
     static class ErrorHighlightTreeCellRenderer extends DefaultTreeCellRenderer {
@@ -95,23 +53,6 @@ public class ConstraintVisualizer {
         @Override
         public void updateUI() {
             super.updateUI();
-        }
-    }
-    // 错误节点缓存：nodeId -> 错误描述
-    static Map<Integer, String> errorNodeMap = new HashMap<>();
-
-    // 递归校验所有节点，收集所有有错误的节点及类型（每个节点只标记自身错误）
-    static void validateAllNodes(LogicNode node) {
-        errorNodeMap.clear();
-        validateAllNodesRec(node, null);
-    }
-    static void validateAllNodesRec(LogicNode node, logic.LogicNode.NodeType parentType) {
-        String err = logic.LogicValidator.validateNodeSelf(node, parentType);
-        if (err != null) {
-            errorNodeMap.put(node.nodeId, err);
-        }
-        for (LogicNode child : node.children) {
-            validateAllNodesRec(child, node.type);
         }
     }
     static int[] nodeIdCounter = new int[]{1};
@@ -160,18 +101,39 @@ public class ConstraintVisualizer {
                             try { nodeId = Integer.parseInt(s.substring(1, idx)); } catch(Exception ex){}
                         }
                     }
-                    // 颜色渲染：编号紫色，内容黑色
+                    // 颜色渲染：编号蓝色，关键字紫色，其他黑色
                     if (s.startsWith("[")) {
                         int idx = s.indexOf("]");
                         if (idx > 0) {
                             String idStr = s.substring(0, idx+1);
                             String content = s.substring(idx+1).trim();
-                            c.setText("<html><span style='color:purple;'>"+idStr+"</span> <span style='color:black;'>"+content+"</span></html>");
+                            // 简单 HTML 转义
+                            java.util.function.Function<String,String> esc = (str) -> str.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
+                            // 将 content 按空格分词，对关键字上色
+                            String[] parts = content.split(" ");
+                            StringBuilder contentHtml = new StringBuilder();
+                            for (int i=0;i<parts.length;i++) {
+                                String p = parts[i];
+                                String clean = p.replaceAll("[^A-Za-z]", "");
+                                String lower = clean.toLowerCase();
+                                boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower);
+                                if (isKeyword) contentHtml.append("<span style='color:purple;'>").append(esc.apply(p)).append("</span>");
+                                else contentHtml.append("<span style='color:black;'>").append(esc.apply(p)).append("</span>");
+                                if (i<parts.length-1) contentHtml.append(" ");
+                            }
+                            c.setText("<html><span style='color:#3C78FF;'>"+esc.apply(idStr)+"</span> "+contentHtml.toString()+"</html>");
                         }
                     }
-                    if (nodeId != null && ConstraintVisualizer.errorNodeMap.containsKey(nodeId)) {
-                        c.putClientProperty("errorLine", true);
-                    }
+                            boolean markError = false;
+                            if (nodeId != null && logic.LogicValidator.errorNodeMap.containsKey(nodeId)) {
+                                markError = true;
+                            } else {
+                                // 如果当前节点折叠且其子孙包含错误，则标红当前节点以提示用户
+                                if (!tree.isExpanded(new TreePath(node.getPath()))) {
+                                    if (SwingTreeUtil.swingSubtreeHasError(node)) markError = true;
+                                }
+                            }
+                            if (markError) c.putClientProperty("errorLine", true);
                 }
                 return c;
             }
@@ -271,15 +233,15 @@ public class ConstraintVisualizer {
                 graphPanel.setHighlightNodeId(null);
             }
         });
-        open.addActionListener(new OpenXmlAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, errorNodeMap));
+        open.addActionListener(new OpenXmlAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status));
         save.addActionListener(new SaveXmlAction(frame, logicRoot, status));
-        addBtn.addActionListener(new AddNodeAction(frame, tree, root, logicRoot, nodeIdCounter, config, graphPanel, status, errorNodeMap));
-        editBtn.addActionListener(new EditNodeAction(frame, tree, root, logicRoot, config, graphPanel, status, errorNodeMap));
-        delBtn.addActionListener(new DeleteNodeAction(frame, tree, root, logicRoot, graphPanel, status, errorNodeMap));
-        moveBtn.addActionListener(new MoveNodeAction(frame, tree, root, logicRoot, graphPanel, status, errorNodeMap));
-        swapSubtreeBtn.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, errorNodeMap));
-        swapNodeBtn.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, errorNodeMap));
-        copyNodeBtn.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, errorNodeMap));
+        addBtn.addActionListener(new AddNodeAction(frame, tree, root, logicRoot, nodeIdCounter, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        editBtn.addActionListener(new EditNodeAction(frame, tree, root, logicRoot, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        delBtn.addActionListener(new DeleteNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        moveBtn.addActionListener(new MoveNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        swapSubtreeBtn.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        swapNodeBtn.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        copyNodeBtn.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
 
         // 导出SVG
         export.setText("导出SVG");
@@ -307,18 +269,13 @@ public class ConstraintVisualizer {
             doc.appendChild(rootElement);
             
             LogicNode temp = logic.LogicXmlUtil.parseXml(rootElement, nodeIdCounter);
-            String err = logic.LogicValidator.validate(temp);
-            if (err != null) {
-                status.setText("预加载XML校验失败：" + err);
-            } else {
-                logicRoot[0] = temp;
-                root.setUserObject(logicRoot[0].toString());
-                root.removeAllChildren();
-                logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-                ((DefaultTreeModel)tree.getModel()).reload();
-                graphPanel.setLogicRoot(logicRoot[0]);
-                status.setText("已预加载空约束公式");
-            }
+            logicRoot[0] = temp;
+            root.setUserObject(logicRoot[0].toString());
+            root.removeAllChildren();
+            logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+            ((DefaultTreeModel)tree.getModel()).reload();
+            graphPanel.setLogicRoot(logicRoot[0]);
+            status.setText("已预加载空约束公式");
         } catch (Exception ex) {
             status.setText("预加载XML失败: "+ex.getMessage());
         }

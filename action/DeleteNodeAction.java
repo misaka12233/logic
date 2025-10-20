@@ -4,6 +4,7 @@ import logic.LogicGraphPanel;
 import logic.LogicNode;
 import logic.TreeHelper;
 import logic.LogicUiUtil;
+import logic.LogicValidator;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -59,7 +60,7 @@ public class DeleteNodeAction implements ActionListener {
         logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
         graphPanel.setLogicRoot(logicRoot[0]);
         // 实时校验
-    LogicUiUtil.validateAllNodes(logicRoot[0], errorNodeMap);
+    LogicValidator.validateAllNodes(logicRoot[0]);
     LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);
     }
 }

@@ -4,6 +4,7 @@ import logic.LogicNode;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.Map;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 import org.w3c.dom.Document;
@@ -23,10 +24,17 @@ public class SaveXmlAction implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
         if (logicRoot[0]==null) return;
-        String err = logic.LogicValidator.validate(logicRoot[0]);
-        if (err != null) {
-            JOptionPane.showMessageDialog(frame, "XML语法校验失败：" + err, "错误", JOptionPane.ERROR_MESSAGE);
-            return;
+        // 使用递归校验收集节点错误（不阻止保存）
+        logic.LogicValidator.validateAllNodes(logicRoot[0]);
+        boolean hasErrors = !logic.LogicValidator.errorNodeMap.isEmpty();
+        if (hasErrors) {
+            // 构造简短错误摘要
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<Integer,String> en : logic.LogicValidator.errorNodeMap.entrySet()) {
+                sb.append("[").append(en.getKey()).append("] ").append(en.getValue()).append("; ");
+            }
+            String msg = "校验发现问题，但仍将保存文件。错误摘要：" + sb.toString();
+            JOptionPane.showMessageDialog(frame, msg, "警告：校验未通过", JOptionPane.WARNING_MESSAGE);
         }
         JFileChooser fc = new JFileChooser(System.getProperty("user.dir"));
         if (fc.showSaveDialog(frame)==JFileChooser.APPROVE_OPTION) {
@@ -34,6 +42,11 @@ public class SaveXmlAction implements ActionListener {
                 DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
                 DocumentBuilder db = dbf.newDocumentBuilder();
                 Document doc = db.newDocument();
+                // 若校验未通过，在文档前添加注释说明（便于追踪）
+                if (hasErrors) {
+                    String shortNote = "VALIDATION FAILED";
+                    doc.appendChild(doc.createComment(shortNote));
+                }
                 doc.appendChild(logic.LogicXmlUtil.toXml(logicRoot[0], doc));
                 TransformerFactory tf = TransformerFactory.newInstance();
                 javax.xml.transform.Transformer t = tf.newTransformer();
