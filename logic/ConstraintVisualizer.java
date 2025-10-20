@@ -176,8 +176,9 @@ public class ConstraintVisualizer {
         JButton swapSubtreeBtn = new JButton("整体交换");
         JButton swapNodeBtn = new JButton("节点交换");
         JButton copyNodeBtn = new JButton("复制节点");
+    JButton renameVarBtn = new JButton("重命名变量");
         JButton expandCollapseBtn = new JButton("展开树");
-        btnPanel.add(addBtn); btnPanel.add(editBtn); btnPanel.add(delBtn); btnPanel.add(moveBtn); btnPanel.add(swapSubtreeBtn); btnPanel.add(swapNodeBtn); btnPanel.add(copyNodeBtn); btnPanel.add(expandCollapseBtn);
+    btnPanel.add(addBtn); btnPanel.add(editBtn); btnPanel.add(delBtn); btnPanel.add(moveBtn); btnPanel.add(swapSubtreeBtn); btnPanel.add(swapNodeBtn); btnPanel.add(copyNodeBtn); btnPanel.add(renameVarBtn); btnPanel.add(expandCollapseBtn);
 
         // 展开/收起树功能
         final boolean[] treeExpanded = {false};
@@ -242,6 +243,7 @@ public class ConstraintVisualizer {
         swapSubtreeBtn.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         swapNodeBtn.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         copyNodeBtn.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        renameVarBtn.addActionListener(new action.RenameVarAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
 
         // 导出SVG
         export.setText("导出SVG");
