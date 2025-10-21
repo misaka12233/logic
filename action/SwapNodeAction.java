@@ -59,7 +59,9 @@ public class SwapNodeAction implements ActionListener {
             JOptionPane.showMessageDialog(frame, "未找到目标节点对应的数据。", "错误", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
+    logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
+    // 保存快照以支持撤销（包含 UI 状态）
+    logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
         // 交换 type
         LogicNode.NodeType tmpType = fromNode.type;
         fromNode.type = toNode.type;

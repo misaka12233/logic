@@ -113,6 +113,9 @@ public class EditNodeAction implements ActionListener {
             }
             default:
         }
+        // 保存快照以支持撤销（包含 UI 展开/选中状态）
+        logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
+        // apply changes
         ln.type = type;
         ln.params.clear(); ln.params.putAll(params);
         ln.paramList.clear(); ln.paramList.addAll(paramList);

@@ -37,6 +37,13 @@ public class OpenXmlAction implements ActionListener {
     public void actionPerformed(ActionEvent e) {
         JFileChooser fc = new JFileChooser(System.getProperty("user.dir"));
         if (fc.showOpenDialog(frame)==JFileChooser.APPROVE_OPTION) {
+            // 如果有未保存的快照/更改，确认是否继续打开新文件
+            if (!logic.UndoManager.isSaved()) {
+                int r = JOptionPane.showConfirmDialog(frame, "当前有未保存的更改，确认打开新文件并丢弃未保存更改吗?", "未保存确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (r != JOptionPane.YES_OPTION) return;
+                // 用户确认丢弃：删除临时快照文件
+                logic.UndoManager.clearTemporaryFiles();
+            }
             try {
                 DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
                 DocumentBuilder db = dbf.newDocumentBuilder();

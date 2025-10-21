@@ -64,6 +64,8 @@ public class CopyNodeAction implements ActionListener {
         );
         if (parent == null) return;
         LogicNode copy = deepCopyNode(toCopy);
+    // 保存快照以支持撤销（包含 UI 状态）
+    logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
         parent.children.add(copy);
         logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);

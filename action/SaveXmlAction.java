@@ -53,6 +53,8 @@ public class SaveXmlAction implements ActionListener {
                 t.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes");
                 t.transform(new javax.xml.transform.dom.DOMSource(doc), new javax.xml.transform.stream.StreamResult(fc.getSelectedFile()));
                 status.setText("XML保存成功");
+                // 标记为已保存
+                logic.UndoManager.setSaved(true);
             } catch (Exception ex) {
                 status.setText("XML保存失败: "+ex.getMessage());
             }

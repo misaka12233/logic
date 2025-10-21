@@ -110,6 +110,8 @@ public class AddNodeAction implements ActionListener {
         newNode.paramList.addAll(paramList);
         newNode.filter.putAll(filter);
         newNode.filterParamList.addAll(filterParamList);
+        // 保存快照以支持撤销（包括 UI 状态）
+        logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
         ln.children.add(newNode);
         logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);

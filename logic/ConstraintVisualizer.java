@@ -30,6 +30,26 @@ public class ConstraintVisualizer {
         return n;
     }
 
+    // 递归展开子树（辅助方法，避免在 main 中使用泛型数组/递归 lambda）
+    public static void expandSubtree(JTree tree, DefaultMutableTreeNode node) {
+        TreePath path = new TreePath(node.getPath());
+        tree.expandPath(path);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            javax.swing.tree.TreeNode tn = node.getChildAt(i);
+            if (tn instanceof DefaultMutableTreeNode) expandSubtree(tree, (DefaultMutableTreeNode) tn);
+        }
+    }
+
+    // 递归收起子树（先收起子孙，再收起自身）
+    public static void collapseSubtree(JTree tree, DefaultMutableTreeNode node) {
+        for (int i = 0; i < node.getChildCount(); i++) {
+            javax.swing.tree.TreeNode tn = node.getChildAt(i);
+            if (tn instanceof DefaultMutableTreeNode) collapseSubtree(tree, (DefaultMutableTreeNode) tn);
+        }
+        TreePath path = new TreePath(node.getPath());
+        tree.collapsePath(path);
+    }
+
 
     // 自定义渲染器
     static class ErrorHighlightTreeCellRenderer extends DefaultTreeCellRenderer {
@@ -68,7 +88,8 @@ public class ConstraintVisualizer {
             JOptionPane.showMessageDialog(null, "读取config.xml失败："+ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
         }
         JFrame frame = new JFrame("约束描述语言可视化");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        // 我们自己处理关闭事件以便提示未保存状态并删除临时文件
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.setSize(900,600);
         DefaultMutableTreeNode root = new DefaultMutableTreeNode("(未加载)");
         JTree tree = new JTree(root);
@@ -165,48 +186,62 @@ public class ConstraintVisualizer {
         JMenuItem export = new JMenuItem("导出PNG");
         fileMenu.add(open); fileMenu.add(save); fileMenu.add(export);
         bar.add(fileMenu);
+        // 编辑菜单，包含撤销
+        JMenu editMenu = new JMenu("编辑");
+        JMenuItem undoItem = new JMenuItem("撤销");
+        undoItem.setEnabled(logic.UndoManager.isUndoAvailable());
+        undoItem.addActionListener(new action.UndoAction(tree, root, logicRoot, nodeIdCounter, graphPanel, status));
+        // 订阅 UndoManager 变化以更新菜单项状态
+        logic.UndoManager.addListener(() -> {
+            // Swing 事件线程更新 UI
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                undoItem.setEnabled(logic.UndoManager.isUndoAvailable());
+            });
+        });
+        editMenu.add(undoItem);
+        bar.add(editMenu);
         frame.setJMenuBar(bar);
 
-        // 节点操作
-        JPanel btnPanel = new JPanel();
-        JButton addBtn = new JButton("添加节点");
-        JButton editBtn = new JButton("修改节点");
-        JButton delBtn = new JButton("删除节点");
-        JButton moveBtn = new JButton("移动节点");
-        JButton swapSubtreeBtn = new JButton("整体交换");
-        JButton swapNodeBtn = new JButton("节点交换");
-        JButton copyNodeBtn = new JButton("复制节点");
-    JButton renameVarBtn = new JButton("重命名变量");
-        JButton expandCollapseBtn = new JButton("展开树");
-    btnPanel.add(addBtn); btnPanel.add(editBtn); btnPanel.add(delBtn); btnPanel.add(moveBtn); btnPanel.add(swapSubtreeBtn); btnPanel.add(swapNodeBtn); btnPanel.add(copyNodeBtn); btnPanel.add(renameVarBtn); btnPanel.add(expandCollapseBtn);
+        // 编辑菜单添加所有节点操作
+        JMenuItem addItem = new JMenuItem("添加");
+        JMenuItem editItem = new JMenuItem("修改");
+        JMenuItem delItem = new JMenuItem("删除");
+        JMenuItem moveItem = new JMenuItem("移动");
+        JMenuItem swapSubtreeItem = new JMenuItem("交换（全子树）");
+        JMenuItem swapNodeItem = new JMenuItem("交换（单节点）");
+        JMenuItem copyNodeItem = new JMenuItem("复制-粘贴（全子树）");
+        JMenuItem renameVarItem = new JMenuItem("变量重命名");
+        editMenu.addSeparator();
+        editMenu.add(addItem); editMenu.add(editItem); editMenu.add(delItem); editMenu.add(moveItem);
+        editMenu.add(swapSubtreeItem); editMenu.add(swapNodeItem); editMenu.add(copyNodeItem); editMenu.add(renameVarItem);
 
-        // 展开/收起树功能
-        final boolean[] treeExpanded = {false};
-        // 展开所有节点
-        Runnable expandAll = () -> {
-            int row = 0;
-            while (row < tree.getRowCount()) {
-                tree.expandRow(row);
-                row++;
-            }
-        };
-        // 收起所有节点，只展开根节点
-        Runnable collapseAll = () -> {
-            for (int i = tree.getRowCount() - 1; i > 0; i--) {
-                tree.collapseRow(i);
-            }
-        };
-        expandCollapseBtn.addActionListener(e -> {
-            if (treeExpanded[0]) {
-                collapseAll.run();
-                expandCollapseBtn.setText("展开树");
-            } else {
-                expandAll.run();
-                expandCollapseBtn.setText("收起树");
-            }
-            treeExpanded[0] = !treeExpanded[0];
+        addItem.addActionListener(new AddNodeAction(frame, tree, root, logicRoot, nodeIdCounter, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        editItem.addActionListener(new EditNodeAction(frame, tree, root, logicRoot, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        delItem.addActionListener(new DeleteNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        moveItem.addActionListener(new MoveNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        swapSubtreeItem.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        swapNodeItem.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        copyNodeItem.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        renameVarItem.addActionListener(new action.RenameVarAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+
+        // 新增视图菜单，包含展开/收起操作
+        JMenu viewMenu = new JMenu("视图");
+        JMenuItem expandItem = new JMenuItem("展开");
+        JMenuItem collapseItem = new JMenuItem("收起");
+        viewMenu.add(expandItem); viewMenu.add(collapseItem);
+        bar.add(viewMenu);
+        expandItem.addActionListener(e -> {
+            TreePath path = tree.getSelectionPath();
+            if (path == null) return;
+            DefaultMutableTreeNode sel = (DefaultMutableTreeNode) path.getLastPathComponent();
+            ConstraintVisualizer.expandSubtree(tree, sel);
         });
-        frame.add(btnPanel, BorderLayout.NORTH);
+        collapseItem.addActionListener(e -> {
+            TreePath path = tree.getSelectionPath();
+            if (path == null) return;
+            DefaultMutableTreeNode sel = (DefaultMutableTreeNode) path.getLastPathComponent();
+            ConstraintVisualizer.collapseSubtree(tree, sel);
+        });
 
         // 选中树节点时高亮右侧图节点
         tree.addTreeSelectionListener(e -> {
@@ -236,14 +271,6 @@ public class ConstraintVisualizer {
         });
         open.addActionListener(new OpenXmlAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status));
         save.addActionListener(new SaveXmlAction(frame, logicRoot, status));
-        addBtn.addActionListener(new AddNodeAction(frame, tree, root, logicRoot, nodeIdCounter, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        editBtn.addActionListener(new EditNodeAction(frame, tree, root, logicRoot, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        delBtn.addActionListener(new DeleteNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        moveBtn.addActionListener(new MoveNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        swapSubtreeBtn.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        swapNodeBtn.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        copyNodeBtn.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        renameVarBtn.addActionListener(new action.RenameVarAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
 
         // 导出SVG
         export.setText("导出SVG");
@@ -282,6 +309,24 @@ public class ConstraintVisualizer {
             status.setText("预加载XML失败: "+ex.getMessage());
         }
 
+        // 退出时提示并删除临时文件
+        frame.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                // 若有未保存更改，提示用户
+                if (!logic.UndoManager.isSaved()) {
+                    int r = JOptionPane.showConfirmDialog(frame, "当前有未保存的更改，确认退出并丢弃未保存更改吗?", "未保存确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    if (r != JOptionPane.YES_OPTION) {
+                        // 取消退出
+                        return;
+                    }
+                }
+                // 用户确认退出或已保存：删除临时文件并退出
+                logic.UndoManager.clearTemporaryFiles();
+                frame.dispose();
+                System.exit(0);
+            }
+        });
         frame.setVisible(true);
     }
 }

@@ -78,8 +78,10 @@ public class RenameVarAction implements ActionListener {
             int ok = JOptionPane.showConfirmDialog(frame, warn.toString(), "冲突检测", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (ok != JOptionPane.YES_OPTION) return;
         }
-        // 在当前节点修改定义
-        ln.params.put("var", newVar);
+    // 保存快照以支持撤销（包含 UI 状态）
+    logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
+    // 在当前节点修改定义
+    ln.params.put("var", newVar);
         // 递归子树把所有使用 oldVar 的位置替换为 newVar
         renameVarInSubtree(ln, oldVar, newVar);
 
