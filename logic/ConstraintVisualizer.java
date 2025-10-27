@@ -96,11 +96,40 @@ public class ConstraintVisualizer {
         tree.setFont(new Font("SansSerif", Font.PLAIN, 18));
         // 右侧有向图可视化面板
         LogicGraphPanel graphPanel = new LogicGraphPanel();
-        // 点击JTree空白处取消选中
+        // 点击JTree空白处取消选中；同时支持点击注释角标切换注释显示
         tree.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
                 int selRow = tree.getRowForLocation(e.getX(), e.getY());
+                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                if (path == null || selRow == -1) {
+                    tree.clearSelection();
+                    return;
+                }
+                // 检查是否点击在注释角标区域（右下角小圆点）
+                Rectangle bounds = tree.getPathBounds(path);
+                if (bounds != null) {
+                    int size = 10; // 与渲染器保持一致的尺寸
+                    int bx = bounds.x + bounds.width - size - 4; // 靠右
+                    int by = bounds.y + (bounds.height - size) / 2; // 垂直居中
+                    java.awt.Point p = e.getPoint();
+                    boolean inBadge = (p.x >= bx && p.x <= bx + size && p.y >= by && p.y <= by + size);
+                    if (inBadge) {
+                        // badge clicked -> 切换该节点注释显示
+                        DefaultMutableTreeNode sel = (DefaultMutableTreeNode)path.getLastPathComponent();
+                        LogicNode ln = TreeHelper.findNode(logicRoot[0], sel, root);
+                        if (ln != null && ln.comments != null && !ln.comments.isEmpty()) {
+                            // 保存展开状态，切换并刷新树
+                            logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
+                            ln.showComments = !ln.showComments;
+                            logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+                            ((DefaultTreeModel)tree.getModel()).reload();
+                            logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+                        }
+                        return;
+                    }
+                }
+                // 非 badge 区域点击：如点击空白则取消选中
                 if (selRow == -1) {
                     tree.clearSelection();
                 }
@@ -112,6 +141,7 @@ public class ConstraintVisualizer {
             public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
                 JLabel c = (JLabel)super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
                 c.putClientProperty("errorLine", false);
+                c.putClientProperty("hasComments", false);
                 if (value instanceof DefaultMutableTreeNode) {
                     DefaultMutableTreeNode node = (DefaultMutableTreeNode)value;
                     Integer nodeId = null;
@@ -142,19 +172,38 @@ public class ConstraintVisualizer {
                                 else contentHtml.append("<span style='color:black;'>").append(esc.apply(p)).append("</span>");
                                 if (i<parts.length-1) contentHtml.append(" ");
                             }
-                            c.setText("<html><span style='color:#3C78FF;'>"+esc.apply(idStr)+"</span> "+contentHtml.toString()+"</html>");
+                            // 查找对应 LogicNode 以决定是否显示注释内容
+                            LogicNode ln = logicRoot[0] == null ? null : TreeHelper.findNode(logicRoot[0], node, root);
+                            StringBuilder html = new StringBuilder();
+                            html.append("<html><span style='color:#3C78FF;'>").append(esc.apply(idStr)).append("</span> ").append(contentHtml.toString());
+                            if (ln != null && ln.comments != null && !ln.comments.isEmpty()) {
+                                c.putClientProperty("hasComments", true);
+                                // 标记当前节点是否处于注释展开状态，用于渲染器在 paintComponent 中水平翻转角标
+                                c.putClientProperty("badgeFlipped", ln.showComments);
+                                // 先在文本末尾增加若干 &nbsp; 作为占位符（放在注释块之前，避免在 block 后产生单独空行）
+                                html.append("&nbsp;&nbsp;&nbsp;&nbsp;");
+                                if (ln.showComments) {
+                                    String commentHtml = esc.apply(ln.getCommentsAsHtml()).replace("\n","<br/>");
+                                    html.append("<div style='font-size:smaller;color:#666;margin-top:6px;'>").append(commentHtml).append("</div>");
+                                }
+                            } else {
+                                // 即便没有注释，也在末尾留一点空隙以保持视觉一致性
+                                html.append("&nbsp;&nbsp;");
+                            }
+                            html.append("</html>");
+                            c.setText(html.toString());
                         }
                     }
-                            boolean markError = false;
-                            if (nodeId != null && logic.LogicValidator.errorNodeMap.containsKey(nodeId)) {
-                                markError = true;
-                            } else {
-                                // 如果当前节点折叠且其子孙包含错误，则标红当前节点以提示用户
-                                if (!tree.isExpanded(new TreePath(node.getPath()))) {
-                                    if (SwingTreeUtil.swingSubtreeHasError(node)) markError = true;
-                                }
-                            }
-                            if (markError) c.putClientProperty("errorLine", true);
+                    boolean markError = false;
+                    if (nodeId != null && logic.LogicValidator.errorNodeMap.containsKey(nodeId)) {
+                        markError = true;
+                    } else {
+                        // 如果当前节点折叠且其子孙包含错误，则标红当前节点以提示用户
+                        if (!tree.isExpanded(new TreePath(node.getPath()))) {
+                            if (SwingTreeUtil.swingSubtreeHasError(node)) markError = true;
+                        }
+                    }
+                    if (markError) c.putClientProperty("errorLine", true);
                 }
                 return c;
             }
@@ -166,6 +215,25 @@ public class ConstraintVisualizer {
                     g.setColor(Color.RED);
                     int y = getHeight() - 2;
                     g.fillRect(2, y, getWidth()-4, 2);
+                }
+                Boolean hasComments = (Boolean)this.getClientProperty("hasComments");
+                Boolean badgeFlipped = (Boolean)this.getClientProperty("badgeFlipped");
+                if (hasComments != null && hasComments) {
+                    // draw small triangle at right side (fixed vertical center); when badgeFlipped==true draw left-pointing triangle
+                    g.setColor(new Color(255,140,0));
+                    int size = 10;
+                    int x = getWidth() - size - 4; // 靠右，不覆盖文本
+                    int y = (getHeight() - size) / 2; // 垂直居中
+                    int[] ys = new int[] { y, y + size, y + size / 2 };
+                    int[] xs;
+                    if (badgeFlipped != null && badgeFlipped) {
+                        // left-pointing triangle within same bbox
+                        xs = new int[] { x + size, x + size, x };
+                    } else {
+                        // right-pointing
+                        xs = new int[] { x, x, x + size };
+                    }
+                    g.fillPolygon(xs, ys, 3);
                 }
             }
         });

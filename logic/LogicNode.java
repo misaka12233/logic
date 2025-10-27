@@ -11,6 +11,21 @@ public class LogicNode {
     public Map<String, String> filter = new LinkedHashMap<>();
     public List<Map<String,String>> filterParamList = new ArrayList<>();
 
+    // 来自 XML 的注释（附加到紧随其后的逻辑节点）
+    public List<String> comments = new ArrayList<>();
+    // UI 标记：是否展开显示注释
+    public boolean showComments = false;
+
+    public String getCommentsAsHtml() {
+        if (comments==null || comments.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i=0;i<comments.size();i++) {
+            if (i>0) sb.append("\n");
+            sb.append(comments.get(i));
+        }
+        return sb.toString();
+    }
+
     public LogicNode(NodeType t, int id) { type = t; nodeId = id; }
 
     public String toString() {

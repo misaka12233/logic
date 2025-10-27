@@ -82,6 +82,14 @@ public class SwapNodeAction implements ActionListener {
         java.util.List<java.util.Map<String,String>> tmpFilterParamList = new java.util.ArrayList<>(fromNode.filterParamList);
         fromNode.filterParamList.clear(); fromNode.filterParamList.addAll(toNode.filterParamList);
         toNode.filterParamList.clear(); toNode.filterParamList.addAll(tmpFilterParamList);
+        // 交换 comments
+        java.util.List<String> tmpComments = new java.util.ArrayList<>(fromNode.comments);
+        fromNode.comments.clear(); fromNode.comments.addAll(toNode.comments);
+        toNode.comments.clear(); toNode.comments.addAll(tmpComments);
+        // 交换 showComments 标志
+        boolean tmpShow = fromNode.showComments;
+        fromNode.showComments = toNode.showComments;
+        toNode.showComments = tmpShow;
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
         ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
         logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);

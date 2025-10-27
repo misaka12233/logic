@@ -25,8 +25,16 @@ public class LogicXmlUtil {
             node.params.put(a.getName(), a.getValue());
         }
         NodeList children = e.getChildNodes();
+        // collect pending comments to attach to next logic child
+        java.util.List<String> pendingComments = new java.util.ArrayList<>();
         for (int i=0;i<children.getLength();i++) {
             org.w3c.dom.Node childNode = children.item(i);
+            if (childNode.getNodeType() == org.w3c.dom.Node.COMMENT_NODE) {
+                String txt = childNode.getNodeValue();
+                if (txt != null) txt = txt.trim();
+                if (txt != null && !txt.isEmpty()) pendingComments.add(txt);
+                continue;
+            }
             if (childNode instanceof Element) {
                 Element ce = (Element)childNode;
                 if (ce.getTagName().equals("param")) {
@@ -58,9 +66,21 @@ public class LogicXmlUtil {
                         }
                     }
                 } else {
-                    node.children.add(parseXml(ce, nodeIdCounter));
+                    // child is a logic sub-node
+                    LogicNode childLogic = parseXml(ce, nodeIdCounter);
+                    // attach any pending comments (concatenate as separate entries)
+                    if (!pendingComments.isEmpty()) {
+                        childLogic.comments.addAll(pendingComments);
+                        pendingComments.clear();
+                    }
+                    node.children.add(childLogic);
                 }
             }
+        }
+        // if there are leftover comments that didn't precede any child logic node, attach them to current node
+        if (!pendingComments.isEmpty()) {
+            node.comments.addAll(pendingComments);
+            pendingComments.clear();
         }
         return node;
     }
@@ -106,6 +126,15 @@ public class LogicXmlUtil {
             e.appendChild(filterE);
         }
         for (LogicNode child : node.children) {
+            // if child has comments, add each comment as a separate COMMENT node before the element
+            if (child.comments != null && !child.comments.isEmpty()) {
+                for (String com : child.comments) {
+                    if (com == null) continue;
+                    String txt = com.trim();
+                    if (txt.isEmpty()) continue;
+                    e.appendChild(doc.createComment(txt));
+                }
+            }
             e.appendChild(toXml(child, doc));
         }
         return e;

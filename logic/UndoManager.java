@@ -22,6 +22,15 @@ public class UndoManager {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
             DocumentBuilder db = dbf.newDocumentBuilder();
             Document doc = db.newDocument();
+            // 如果根节点有注释，先写入文档注释（保留在元素之前）
+            if (root.comments != null && !root.comments.isEmpty()) {
+                StringBuilder cs = new StringBuilder();
+                for (int i=0;i<root.comments.size();i++) {
+                    if (i>0) cs.append("\n");
+                    cs.append(root.comments.get(i));
+                }
+                doc.appendChild(doc.createComment(cs.toString()));
+            }
             doc.appendChild(LogicXmlUtil.toXml(root, doc));
             TransformerFactory tf = TransformerFactory.newInstance();
             javax.xml.transform.Transformer t = tf.newTransformer();

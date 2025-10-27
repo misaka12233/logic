@@ -47,6 +47,15 @@ public class SaveXmlAction implements ActionListener {
                     String shortNote = "VALIDATION FAILED";
                     doc.appendChild(doc.createComment(shortNote));
                 }
+                // 先写入根节点自身的注释（如果有），每条注释作为独立的 COMMENT 节点
+                if (logicRoot[0].comments != null && !logicRoot[0].comments.isEmpty()) {
+                    for (String com : logicRoot[0].comments) {
+                        if (com == null) continue;
+                        String txt = com.trim();
+                        if (txt.isEmpty()) continue;
+                        doc.appendChild(doc.createComment(txt));
+                    }
+                }
                 doc.appendChild(logic.LogicXmlUtil.toXml(logicRoot[0], doc));
                 TransformerFactory tf = TransformerFactory.newInstance();
                 javax.xml.transform.Transformer t = tf.newTransformer();

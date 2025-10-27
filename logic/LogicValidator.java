@@ -128,15 +128,17 @@ public class LogicValidator {
                 if (!node.params.containsKey("name")) return "bfunc 缺少 name 参数";
                 if (!node.children.isEmpty()) return "bfunc不能有子公式";
                 break;
-            case AND: case OR: case IMPLIES:
+            case IMPLIES:
                 if (node.children.size()!=2) return node.type.name().toLowerCase()+"节点必须有2个子公式";
                 break;
             case NOT:
                 if (node.children.size()!=1) return "not 节点必须有1个子公式";
                 break;
             case FORMULA:
-                if (parentType != null) return "FORMULA类型只能作为根节点出现";
                 if (node.children.size() > 1) return "FORMULA类型的子节点不能超过1个";
+                break;
+            case AND: case OR:
+                if (node.children.size() < 1) return node.type.name().toLowerCase()+"节点必须有子公式";
                 break;
             default:
                 return "出现unknown节点";

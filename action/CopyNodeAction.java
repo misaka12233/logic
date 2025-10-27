@@ -79,6 +79,12 @@ public class CopyNodeAction implements ActionListener {
     private LogicNode deepCopyNode(LogicNode node) {
         LogicNode n = new LogicNode(node.type, nodeIdCounter[0]++);
         n.params.putAll(node.params);
+        if (node.comments != null && !node.comments.isEmpty()) {
+            for (String c : node.comments) {
+                n.comments.add(c);
+            }
+        }
+        n.showComments = node.showComments;
         for (java.util.Map<String,String> p : node.paramList) n.paramList.add(new java.util.LinkedHashMap<>(p));
         n.filter.putAll(node.filter);
         for (java.util.Map<String,String> p : node.filterParamList) n.filterParamList.add(new java.util.LinkedHashMap<>(p));
