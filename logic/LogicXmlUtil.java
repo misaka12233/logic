@@ -8,6 +8,8 @@ public class LogicXmlUtil {
         String tag = e.getTagName();
         LogicNode.NodeType type;
         switch(tag) {
+            case "rules": type = LogicNode.NodeType.RULES; break;
+            case "rule": type = LogicNode.NodeType.RULE; break;
             case "forall": type = LogicNode.NodeType.FORALL; break;
             case "exists": type = LogicNode.NodeType.EXISTS; break;
             case "and": type = LogicNode.NodeType.AND; break;
@@ -19,6 +21,12 @@ public class LogicXmlUtil {
             default: type = LogicNode.NodeType.UNKNOWN; break;
         }
         LogicNode node = new LogicNode(type, nodeIdCounter[0]++);
+        // 如果节点类型未知，记录原始标签与内容供可视化展示
+        if (type == LogicNode.NodeType.UNKNOWN) {
+            node.unknownTag = tag;
+            String txt = e.getTextContent();
+            node.unknownContent = txt == null ? "" : txt.trim();
+        }
         NamedNodeMap attrs = e.getAttributes();
         for (int i=0;i<attrs.getLength();i++) {
             Attr a = (Attr)attrs.item(i);
@@ -88,6 +96,8 @@ public class LogicXmlUtil {
     public static Element toXml(LogicNode node, Document doc) {
         String tag;
         switch(node.type) {
+            case RULES: tag = "rules"; break;
+            case RULE: tag = "rule"; break;
             case FORALL: tag = "forall"; break;
             case EXISTS: tag = "exists"; break;
             case AND: tag = "and"; break;

@@ -50,16 +50,17 @@ public class DeleteNodeAction implements ActionListener {
         }
         int confirm = JOptionPane.showConfirmDialog(frame, "确定要删除该节点及其所有子节点吗？", "确认删除", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm != JOptionPane.YES_OPTION) return;
-        logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
-    // 保存快照以支持撤销（包含 UI 状态）
+        // 保存快照以支持撤销（包含 UI 状态）
     logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
         if (parent!=null)
             parent.children.remove(ln);
         else
             logicRoot[0].children.remove(ln);
+        java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+        Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
         ((DefaultTreeModel)tree.getModel()).reload();
-        logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+        logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         // 实时校验
         LogicValidator.validateAllNodes(logicRoot[0]);

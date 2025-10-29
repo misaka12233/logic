@@ -112,11 +112,13 @@ public class AddNodeAction implements ActionListener {
         newNode.filterParamList.addAll(filterParamList);
         // 保存快照以支持撤销（包括 UI 状态）
         logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
-        ln.children.add(newNode);
-        logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
-        logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-        ((DefaultTreeModel)tree.getModel()).reload();
-        logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+    ln.children.add(newNode);
+    // 保存当前展开 id 列表与选中 id，以便重建后准确恢复 UI 状态
+    java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+    Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
+    logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+    ((DefaultTreeModel)tree.getModel()).reload();
+    logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         // 实时校验
         // 需传入全局errorNodeMap

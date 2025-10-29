@@ -119,12 +119,12 @@ public class ConstraintVisualizer {
                         DefaultMutableTreeNode sel = (DefaultMutableTreeNode)path.getLastPathComponent();
                         LogicNode ln = TreeHelper.findNode(logicRoot[0], sel, root);
                         if (ln != null && ln.comments != null && !ln.comments.isEmpty()) {
-                            // 保存展开状态，切换并刷新树
-                            logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
+                            // 仅切换该节点的注释显示并刷新该节点的渲染，避免重建整棵树导致展开状态变化
                             ln.showComments = !ln.showComments;
-                            logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-                            ((DefaultTreeModel)tree.getModel()).reload();
-                            logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+                            DefaultTreeModel model = (DefaultTreeModel) tree.getModel();
+                            model.nodeChanged(sel);
+                            // 确保界面刷新（仅重绘树即可）
+                            tree.repaint();
                         }
                         return;
                     }
@@ -167,7 +167,7 @@ public class ConstraintVisualizer {
                                 String p = parts[i];
                                 String clean = p.replaceAll("[^A-Za-z]", "");
                                 String lower = clean.toLowerCase();
-                                boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower);
+                                boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower) || "rules".equals(lower) || "rule".equals(lower);
                                 if (isKeyword) contentHtml.append("<span style='color:purple;'>").append(esc.apply(p)).append("</span>");
                                 else contentHtml.append("<span style='color:black;'>").append(esc.apply(p)).append("</span>");
                                 if (i<parts.length-1) contentHtml.append(" ");
@@ -279,9 +279,11 @@ public class ConstraintVisualizer {
         JMenuItem swapNodeItem = new JMenuItem("交换（单节点）");
         JMenuItem copyNodeItem = new JMenuItem("复制-粘贴（全子树）");
         JMenuItem renameVarItem = new JMenuItem("变量重命名");
+        JMenuItem editCommentsItem = new JMenuItem("编辑注释");
         editMenu.addSeparator();
         editMenu.add(addItem); editMenu.add(editItem); editMenu.add(delItem); editMenu.add(moveItem);
         editMenu.add(swapSubtreeItem); editMenu.add(swapNodeItem); editMenu.add(copyNodeItem); editMenu.add(renameVarItem);
+        editMenu.add(editCommentsItem);
 
         addItem.addActionListener(new AddNodeAction(frame, tree, root, logicRoot, nodeIdCounter, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
         editItem.addActionListener(new EditNodeAction(frame, tree, root, logicRoot, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
@@ -291,6 +293,7 @@ public class ConstraintVisualizer {
         swapNodeItem.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         copyNodeItem.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
         renameVarItem.addActionListener(new action.RenameVarAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        editCommentsItem.addActionListener(new action.EditCommentsAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
 
         // 新增视图菜单，包含展开/收起操作
         JMenu viewMenu = new JMenu("视图");
@@ -311,6 +314,41 @@ public class ConstraintVisualizer {
             ConstraintVisualizer.collapseSubtree(tree, sel);
         });
 
+        // 构建节点右键菜单：包含编辑菜单和视图菜单中的操作（除了撤回）
+        final JPopupMenu nodePopup = new JPopupMenu();
+    java.util.List<JMenuItem> popupItems = java.util.Arrays.asList(addItem, editItem, delItem, moveItem, swapSubtreeItem, swapNodeItem, copyNodeItem, renameVarItem, editCommentsItem, expandItem, collapseItem);
+        for (JMenuItem src : popupItems) {
+            JMenuItem pi = new JMenuItem(src.getText());
+            // 通过触发原菜单项的 doClick() 来复用其行为和现有监听器
+            pi.addActionListener(ev -> {
+                // 确保选中路径在触发时已经设置
+                src.doClick();
+            });
+            nodePopup.add(pi);
+        }
+
+        // 右键点击：选中节点并显示右键菜单（兼容不同平台的 popupTrigger）
+        tree.addMouseListener(new java.awt.event.MouseAdapter() {
+            private void tryShowPopup(java.awt.event.MouseEvent e) {
+                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                int selRow = tree.getRowForLocation(e.getX(), e.getY());
+                if (path != null && selRow != -1) {
+                    // 选中被右击的节点
+                    tree.setSelectionPath(path);
+                    // 在该位置显示弹出菜单
+                    nodePopup.show(tree, e.getX(), e.getY());
+                }
+            }
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (javax.swing.SwingUtilities.isRightMouseButton(e) || e.isPopupTrigger()) tryShowPopup(e);
+            }
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                if (e.isPopupTrigger()) tryShowPopup(e);
+            }
+        });
+
         // 选中树节点时高亮右侧图节点
         tree.addTreeSelectionListener(e -> {
             TreePath path = tree.getSelectionPath();
@@ -319,7 +357,18 @@ public class ConstraintVisualizer {
                 LogicNode ln = TreeHelper.findNode(logicRoot[0], sel, root);
                 if (ln != null) {
                     graphPanel.setHighlightNodeId(ln.nodeId);
-                    // 平移图片中心到该节点
+                    // 设置缩放倍率为 1.5 并同步重绘（确保 nodeBounds 在新 scale 下已更新），然后居中选中节点
+                    graphPanel.setScale(1.5);
+                    // 强制立刻绘制以便 nodeBounds 在后续计算中是最新的（避免 repaint 异步导致使用旧布局）
+                    try {
+                        // 只有在组件大小可用时才同步绘制
+                        if (graphPanel.getWidth() > 0 && graphPanel.getHeight() > 0) {
+                            graphPanel.paintImmediately(0, 0, graphPanel.getWidth(), graphPanel.getHeight());
+                        }
+                    } catch (Exception ex) {
+                        // paintImmediately 在极少数情况下可能抛出异常，忽略以防止影响主流程
+                    }
+                    // 平移图片中心到该节点（使用最新的 scale）
                     Rectangle rect = graphPanel.getNodeBounds(ln.nodeId);
                     if (rect != null) {
                         int cx = rect.x + rect.width/2;
@@ -362,7 +411,7 @@ public class ConstraintVisualizer {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
             DocumentBuilder db = dbf.newDocumentBuilder();
             Document doc = db.newDocument();
-            Element rootElement = doc.createElement("formula");
+            Element rootElement = doc.createElement("rules");
             doc.appendChild(rootElement);
             
             LogicNode temp = logic.LogicXmlUtil.parseXml(rootElement, nodeIdCounter);

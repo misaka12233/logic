@@ -66,11 +66,12 @@ public class CopyNodeAction implements ActionListener {
         LogicNode copy = deepCopyNode(toCopy);
     // 保存快照以支持撤销（包含 UI 状态）
     logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
-        parent.children.add(copy);
-        logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
-        logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-        ((DefaultTreeModel)tree.getModel()).reload();
-        logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+    parent.children.add(copy);
+    java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+    Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
+    logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+    ((DefaultTreeModel)tree.getModel()).reload();
+    logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         LogicValidator.validateAllNodes(logicRoot[0]);
         LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);

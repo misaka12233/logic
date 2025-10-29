@@ -85,11 +85,12 @@ public class RenameVarAction implements ActionListener {
         // 递归子树把所有使用 oldVar 的位置替换为 newVar
         renameVarInSubtree(ln, oldVar, newVar);
 
-        // 重新构建树与图并校验
-        SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
-        SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-        ((DefaultTreeModel)tree.getModel()).reload();
-        SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+    // 重新构建树与图并校验（使用 id 列表恢复展开/选中状态以避免丢失）
+    java.util.List<Integer> expandedIds = SwingTreeUtil.collectExpandedIds(tree, root);
+    Integer selectedId = SwingTreeUtil.findSelectedNodeId(tree);
+    SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+    ((DefaultTreeModel)tree.getModel()).reload();
+    SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         LogicValidator.validateAllNodes(logicRoot[0]);
         LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);

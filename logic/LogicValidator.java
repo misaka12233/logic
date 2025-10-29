@@ -113,11 +113,20 @@ public class LogicValidator {
 
     // 只校验当前节点本身的错误（不递归子节点）
     static String validateNodeSelf(logic.LogicNode node, logic.LogicNode.NodeType parentType) {
-        // 根节点只能是FORMULA类型
-        if (parentType == null && node.type != logic.LogicNode.NodeType.FORMULA) {
-            return "根节点只能是FORMULA类型";
+        // 根节点要求为 RULES 类型（包含若干 rule）
+        if (parentType == null && node.type != logic.LogicNode.NodeType.RULES) {
+            return "根节点只能是RULES类型";
         }
         switch (node.type) {
+            case RULES:
+                // rules 必须为根节点
+                if (parentType != null) return "rules 节点必须位于根位置";
+                // 可包含多个 rule 子节点，至少允许 0 个以便编辑空规则集合
+                break;
+            case RULE:
+                // rule 的父节点必须是 rules
+                if (parentType != logic.LogicNode.NodeType.RULES) return "rule 的父节点必须是 rules";
+                break;
             case FORALL: case EXISTS:
                 if (!node.params.containsKey("var") || !node.params.containsKey("in"))
                     return "量词节点缺少 var 或 in 参数";
@@ -135,13 +144,18 @@ public class LogicValidator {
                 if (node.children.size()!=1) return "not 节点必须有1个子公式";
                 break;
             case FORMULA:
+                // formula 的父节点必须是 rule
+                if (parentType != logic.LogicNode.NodeType.RULE) return "formula 的父节点必须是 rule";
                 if (node.children.size() > 1) return "FORMULA类型的子节点不能超过1个";
                 break;
             case AND: case OR:
                 if (node.children.size() < 1) return node.type.name().toLowerCase()+"节点必须有子公式";
                 break;
             default:
-                return "出现unknown节点";
+                // unknown 节点只能出现在 rule 或 rules 之下
+                if (parentType != logic.LogicNode.NodeType.RULE && parentType != logic.LogicNode.NodeType.RULES)
+                    return "unknown 节点的父节点必须是 rule 或 rules";
+                break;
         }
         if (node.type != logic.LogicNode.NodeType.BFUNC && node.paramList != null && !node.paramList.isEmpty()) {
             return node.type.name().toLowerCase() + "类型不允许有参数列表";

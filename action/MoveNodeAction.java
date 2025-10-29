@@ -56,7 +56,6 @@ public class MoveNodeAction implements ActionListener {
             JOptionPane.showMessageDialog(frame, "未找到目标节点对应的数据。", "错误", JOptionPane.WARNING_MESSAGE);
             return;
         }
-    logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
     // 保存快照以支持撤销（包含 UI 状态）
     logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
         if (fromParent!=null) {
@@ -65,9 +64,11 @@ public class MoveNodeAction implements ActionListener {
             logicRoot[0].children.remove(fromNode);
         }
         toNode.children.add(fromNode);
+        java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+        Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
         ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
-        logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+        logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         logic.LogicValidator.validateAllNodes(logicRoot[0]);
         logic.LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);

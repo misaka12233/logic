@@ -59,9 +59,8 @@ public class SwapNodeAction implements ActionListener {
             JOptionPane.showMessageDialog(frame, "未找到目标节点对应的数据。", "错误", JOptionPane.WARNING_MESSAGE);
             return;
         }
-    logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
-    // 保存快照以支持撤销（包含 UI 状态）
-    logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
+        // 保存快照以支持撤销（包含 UI 状态）
+        logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
         // 交换 type
         LogicNode.NodeType tmpType = fromNode.type;
         fromNode.type = toNode.type;
@@ -86,13 +85,22 @@ public class SwapNodeAction implements ActionListener {
         java.util.List<String> tmpComments = new java.util.ArrayList<>(fromNode.comments);
         fromNode.comments.clear(); fromNode.comments.addAll(toNode.comments);
         toNode.comments.clear(); toNode.comments.addAll(tmpComments);
+        // 交换 unknownTag/unknownContent（若存在）
+        String tmpUnknownTag = fromNode.unknownTag;
+        String tmpUnknownContent = fromNode.unknownContent;
+        fromNode.unknownTag = toNode.unknownTag;
+        fromNode.unknownContent = toNode.unknownContent;
+        toNode.unknownTag = tmpUnknownTag;
+        toNode.unknownContent = tmpUnknownContent;
         // 交换 showComments 标志
         boolean tmpShow = fromNode.showComments;
         fromNode.showComments = toNode.showComments;
         toNode.showComments = tmpShow;
-        logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-        ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
-        logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+    java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+    Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
+    logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+    ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
+    logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         logic.LogicValidator.validateAllNodes(logicRoot[0]);
         logic.LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);

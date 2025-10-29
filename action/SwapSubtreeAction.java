@@ -67,14 +67,15 @@ public class SwapSubtreeAction implements ActionListener {
             JOptionPane.showMessageDialog(frame, "节点索引异常，无法交换。", "错误", JOptionPane.WARNING_MESSAGE);
             return;
         }
-    logic.SwingTreeUtil.saveExpandState(logicRoot[0], root, tree);
     // 保存快照以支持撤销（包含 UI 状态）
     logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
     fromParent.children.set(fromIdx, toNode);
     toParent.children.set(toIdx, fromNode);
+        java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+        Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
         ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
-        logic.SwingTreeUtil.restoreExpandState(logicRoot[0], root, tree);
+        logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         logic.LogicValidator.validateAllNodes(logicRoot[0]);
         logic.LogicUiUtil.updateErrorStatusBar(logicRoot[0], status, errorNodeMap);
