@@ -106,7 +106,14 @@ public class LogicXmlUtil {
             case NOT: tag = "not"; break;
             case BFUNC: tag = "bfunc"; break;
             case FORMULA: tag = "formula"; break;
-            default: tag = "unknown"; break;
+            default:
+                // for UNKNOWN nodes, if we recorded the original tag during parse, reuse it
+                if (node.type == LogicNode.NodeType.UNKNOWN && node.unknownTag != null && !node.unknownTag.isEmpty()) {
+                    tag = node.unknownTag;
+                } else {
+                    tag = "unknown";
+                }
+                break;
         }
         Element e = doc.createElement(tag);
         for (var entry : node.params.entrySet()) {
@@ -134,6 +141,15 @@ public class LogicXmlUtil {
                 filterE.appendChild(pe);
             }
             e.appendChild(filterE);
+        }
+        // If this is an UNKNOWN node and we have preserved textual content (and no structured children/params),
+        // write it back as text content so the original payload is preserved.
+        if (node.type == LogicNode.NodeType.UNKNOWN) {
+            String uc = node.unknownContent;
+            boolean hasStructuredChildren = !node.children.isEmpty() || !node.paramList.isEmpty() || !node.filter.isEmpty();
+            if (uc != null && !uc.isEmpty() && !hasStructuredChildren) {
+                e.appendChild(doc.createTextNode(uc));
+            }
         }
         for (LogicNode child : node.children) {
             // if child has comments, add each comment as a separate COMMENT node before the element
