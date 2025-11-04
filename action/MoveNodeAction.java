@@ -42,8 +42,22 @@ public class MoveNodeAction implements ActionListener {
             JOptionPane.showMessageDialog(frame, "未找到选中节点对应的数据。", "错误", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        // 新增条件：当前节点 localId 必须不为 0
+        if (fromNode.localId == 0) {
+            JOptionPane.showMessageDialog(frame, "该节点不可移动", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         java.util.List<DefaultMutableTreeNode> candidates = new java.util.ArrayList<>();
         TreeHelper.collectNodes(root, fromSel, candidates, false);
+        // 过滤：目标节点必须 localId != 0 且 ruleId 与当前节点相同
+        java.util.Iterator<DefaultMutableTreeNode> it = candidates.iterator();
+        while (it.hasNext()) {
+            DefaultMutableTreeNode tn = it.next();
+            LogicNode ln = TreeHelper.findNode(logicRoot[0], tn, root);
+            if (ln == null || ln.localId == 0 || ln.ruleId != fromNode.ruleId) {
+                it.remove();
+            }
+        }
         if (candidates.isEmpty()) {
             JOptionPane.showMessageDialog(frame, "没有可用于移动的目标节点。", "提示", JOptionPane.WARNING_MESSAGE);
             return;

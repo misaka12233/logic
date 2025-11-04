@@ -18,14 +18,8 @@ public class SwingTreeUtil {
         TreePath path = new TreePath(node.getPath());
         if (tree.isExpanded(path)) {
             Object uo = node.getUserObject();
-            if (uo != null) {
-                String s = uo.toString();
-                if (s.startsWith("[")) {
-                    int idx = s.indexOf("]");
-                    if (idx > 1) {
-                        try { out.add(Integer.parseInt(s.substring(1, idx))); } catch(Exception ex) {}
-                    }
-                }
+            if (uo instanceof logic.LogicNode) {
+                out.add(((logic.LogicNode)uo).nodeId);
             }
         }
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -45,14 +39,7 @@ public class SwingTreeUtil {
         Object last = sel.getLastPathComponent();
         if (!(last instanceof DefaultMutableTreeNode)) return null;
         Object uo = ((DefaultMutableTreeNode)last).getUserObject();
-        if (uo == null) return null;
-        String s = uo.toString();
-        if (s.startsWith("[")) {
-            int idx = s.indexOf("]");
-            if (idx > 1) {
-                try { return Integer.parseInt(s.substring(1, idx)); } catch(Exception ex) {}
-            }
-        }
+        if (uo instanceof logic.LogicNode) return ((logic.LogicNode)uo).nodeId;
         return null;
     }
 
@@ -79,17 +66,9 @@ public class SwingTreeUtil {
     }
     private static void applyUiStateImpl(JTree tree, DefaultMutableTreeNode node, java.util.Set<Integer> set) {
         Object uo = node.getUserObject();
-        if (uo != null) {
-            String s = uo.toString();
-            if (s.startsWith("[")) {
-                int idx = s.indexOf("]");
-                if (idx > 1) {
-                    try {
-                        int id = Integer.parseInt(s.substring(1, idx));
-                        if (set.contains(id)) tree.expandPath(new TreePath(node.getPath()));
-                    } catch(Exception ex) {}
-                }
-            }
+        if (uo instanceof logic.LogicNode) {
+            int id = ((logic.LogicNode)uo).nodeId;
+            if (set.contains(id)) tree.expandPath(new TreePath(node.getPath()));
         }
         for (int i=0;i<node.getChildCount();i++) {
             javax.swing.tree.TreeNode tn = node.getChildAt(i);
@@ -99,14 +78,8 @@ public class SwingTreeUtil {
 
     private static DefaultMutableTreeNode findSwingNodeById(DefaultMutableTreeNode root, int id) {
         Object uo = root.getUserObject();
-        if (uo != null) {
-            String s = uo.toString();
-            if (s.startsWith("[")) {
-                int idx = s.indexOf("]");
-                if (idx > 1) {
-                    try { if (Integer.parseInt(s.substring(1, idx)) == id) return root; } catch(Exception ex) {}
-                }
-            }
+        if (uo instanceof logic.LogicNode) {
+            if (((logic.LogicNode)uo).nodeId == id) return root;
         }
         for (int i=0;i<root.getChildCount();i++) {
             javax.swing.tree.TreeNode tn = root.getChildAt(i);
@@ -119,10 +92,12 @@ public class SwingTreeUtil {
 
     // 构建Swing树
     public static void buildSwingTree(logic.LogicNode node, DefaultMutableTreeNode swingNode) {
-        swingNode.setUserObject(node.toString());
+        // 在构建 Swing 树前为节点分配 rule/local 编号（仅在根 rules 节点）
+        if (node.type == logic.LogicNode.NodeType.RULES) logic.LogicUiUtil.assignRuleAndLocalIds(node);
+        swingNode.setUserObject(node);
         swingNode.removeAllChildren();
         for (logic.LogicNode child : node.children) {
-            DefaultMutableTreeNode c = new DefaultMutableTreeNode(child.toString());
+            DefaultMutableTreeNode c = new DefaultMutableTreeNode(child);
             buildSwingTree(child, c);
             swingNode.add(c);
         }
@@ -134,18 +109,9 @@ public class SwingTreeUtil {
             if (!(tn instanceof DefaultMutableTreeNode)) continue;
             DefaultMutableTreeNode child = (DefaultMutableTreeNode) tn;
             Object uo = child.getUserObject();
-            if (uo != null) {
-                String s = uo.toString();
-                if (s.startsWith("[")) {
-                    int idx = s.indexOf("]");
-                    if (idx > 1) {
-                        try {
-                            int cid = Integer.parseInt(s.substring(1, idx));
-                            if (logic.LogicValidator.errorNodeMap.containsKey(cid)) return true;
-                        } catch (Exception ex) {
-                        }
-                    }
-                }
+            if (uo instanceof logic.LogicNode) {
+                int cid = ((logic.LogicNode)uo).nodeId;
+                if (logic.LogicValidator.errorNodeMap.containsKey(cid)) return true;
             }
             if (swingSubtreeHasError(child)) return true;
         }

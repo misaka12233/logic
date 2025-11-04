@@ -18,6 +18,7 @@ public class LogicGraphPanel extends JPanel {
     }
     private LogicNode root;
     private Integer highlightNodeId = null;
+    public Integer getHighlightNodeId() { return highlightNodeId; }
     private Map<LogicNode, Rectangle> nodeBounds = new HashMap<>();
     private Map<LogicNode, Dimension> nodeSizes = new HashMap<>();
     private int vGap = 40;
@@ -95,16 +96,29 @@ public class LogicGraphPanel extends JPanel {
         nodeBounds.clear();
         nodeSizes.clear();
         if (root == null) return;
-        // 先计算所有节点的自适应尺寸
-        calcNodeSizes(g2, root);
+        // 计算将要用于绘制的显示根：
+        // - 若高亮节点存在且其 ruleId != 0，则使用该 rule 下 localId==1 的节点作为显示根（若找到）
+        // - 否则不显示
+        LogicNode displayRoot = null;
+        if (highlightNodeId != null) {
+            LogicNode highlighted = LogicUiUtil.findNodeById(root, highlightNodeId);
+            if (highlighted != null && highlighted.ruleId > 0) {
+                LogicNode firstInRule = LogicUiUtil.findNodeByRuleAndLocal(root, highlighted.ruleId, 1);
+                if (firstInRule != null) displayRoot = firstInRule;
+            }
+        }
+        if (displayRoot == null) return; // 无合适显示根，跳过绘制
+
+        // 先计算所有将被绘制子树节点的自适应尺寸
+        calcNodeSizes(g2, displayRoot);
         // 计算布局
         int panelWidth = (int)(getWidth() / scale);
         int[] y = {vGap};
-        layoutTree(root, panelWidth / 2, y, g2);
+        layoutTree(displayRoot, panelWidth / 2, y, g2);
         // 绘制连线
-        drawEdges(g2, root);
+        drawEdges(g2, displayRoot);
         // 绘制节点
-        drawNodes(g2, root);
+        drawNodes(g2, displayRoot);
     }
 
     // 递归计算每个节点的自适应尺寸
@@ -181,13 +195,21 @@ public class LogicGraphPanel extends JPanel {
         g2.fillRoundRect(rect.x, rect.y, nodeWidth, nodeHeight, 16, 16);
         g2.setColor(Color.BLACK);
         g2.drawRoundRect(rect.x, rect.y, nodeWidth, nodeHeight, 16, 16);
-        // 节点内容：编号蓝色，关键字紫色，其余黑色
+        // 节点内容：RULE 与 UNKNOWN 节点用绿色前缀 (ruleId)，其它节点用蓝色前缀 [localId]
         String text = node.toString();
-        String nodeIdStr = "[" + node.nodeId + "]";
         FontMetrics fm = g2.getFontMetrics();
-        // 计算各段宽度
-        int idWidth = fm.stringWidth(nodeIdStr);
-        String content = text.startsWith(nodeIdStr) ? text.substring(nodeIdStr.length()).trim() : text;
+        String prefix = "";
+        String content = text;
+        if (node.type == LogicNode.NodeType.RULES) {
+            prefix = "";
+        } else if (node.type == LogicNode.NodeType.RULE || node.type == LogicNode.NodeType.UNKNOWN) {
+            prefix = "(" + node.ruleId + ")";
+            if (text.startsWith(prefix)) content = text.substring(prefix.length()).trim();
+        } else {
+            prefix = "[" + node.localId + "]";
+            if (text.startsWith(prefix)) content = text.substring(prefix.length()).trim();
+        }
+        int idWidth = fm.stringWidth(prefix + " ");
         // 分词并测量宽度
         String[] parts = content.split(" ");
         int contentWidth = 0;
@@ -195,9 +217,12 @@ public class LogicGraphPanel extends JPanel {
         int totalWidth = idWidth + 4 + contentWidth;
         int tx = rect.x + (nodeWidth - totalWidth) / 2;
         int ty = rect.y + (nodeHeight + fm.getAscent() - fm.getDescent()) / 2;
-        // 编号（蓝色）
-        g2.setColor(new Color(60, 120, 255));
-        g2.drawString(nodeIdStr, tx, ty);
+        // 前缀（编号）：RULE 为绿色，其它为蓝色
+        if (!prefix.isEmpty()) {
+            if (node.type == LogicNode.NodeType.RULE || node.type == LogicNode.NodeType.UNKNOWN) g2.setColor(new Color(46,139,87));
+            else g2.setColor(new Color(60, 120, 255));
+            g2.drawString(prefix, tx, ty);
+        }
         // 内容（逐词着色）
         int curX = tx + idWidth + 4;
         for (int i=0;i<parts.length;i++) {

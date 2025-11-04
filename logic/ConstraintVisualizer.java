@@ -96,6 +96,8 @@ public class ConstraintVisualizer {
         tree.setFont(new Font("SansSerif", Font.PLAIN, 18));
         // 右侧有向图可视化面板
         LogicGraphPanel graphPanel = new LogicGraphPanel();
+        // 在图上方显示当前 ruleId 的文本框（只读标签）
+        JLabel ruleLabel = new JLabel("ruleId: null");
         // 点击JTree空白处取消选中；同时支持点击注释角标切换注释显示
         tree.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -144,56 +146,63 @@ public class ConstraintVisualizer {
                 c.putClientProperty("hasComments", false);
                 if (value instanceof DefaultMutableTreeNode) {
                     DefaultMutableTreeNode node = (DefaultMutableTreeNode)value;
-                    Integer nodeId = null;
-                    String s = node.getUserObject().toString();
-                    if (s.startsWith("[")) {
-                        int idx = s.indexOf("]");
-                        if (idx > 1) {
-                            try { nodeId = Integer.parseInt(s.substring(1, idx)); } catch(Exception ex){}
-                        }
-                    }
-                    // 颜色渲染：编号蓝色，关键字紫色，其他黑色
-                    if (s.startsWith("[")) {
-                        int idx = s.indexOf("]");
+                    Object uo = node.getUserObject();
+                    LogicNode ln = null;
+                    if (uo instanceof LogicNode) ln = (LogicNode)uo;
+                    // 文本与编号前缀由 LogicNode.toString() 提供，但我们需要把编号着色：
+                    // - RULES: 无编号
+                    // - RULE: 前置 (ruleId) 用绿色
+                    // - 其它: 前置 [localId] 用蓝色
+                    String full = (uo == null) ? "" : uo.toString();
+                    java.util.function.Function<String,String> esc = (str) -> str.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
+                    String prefix = "";
+                    String content = full;
+                    if (full.startsWith("(")) {
+                        int idx = full.indexOf(")");
                         if (idx > 0) {
-                            String idStr = s.substring(0, idx+1);
-                            String content = s.substring(idx+1).trim();
-                            // 简单 HTML 转义
-                            java.util.function.Function<String,String> esc = (str) -> str.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
-                            // 将 content 按空格分词，对关键字上色
-                            String[] parts = content.split(" ");
-                            StringBuilder contentHtml = new StringBuilder();
-                            for (int i=0;i<parts.length;i++) {
-                                String p = parts[i];
-                                String clean = p.replaceAll("[^A-Za-z]", "");
-                                String lower = clean.toLowerCase();
-                                boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower) || "rules".equals(lower) || "rule".equals(lower);
-                                if (isKeyword) contentHtml.append("<span style='color:purple;'>").append(esc.apply(p)).append("</span>");
-                                else contentHtml.append("<span style='color:black;'>").append(esc.apply(p)).append("</span>");
-                                if (i<parts.length-1) contentHtml.append(" ");
-                            }
-                            // 查找对应 LogicNode 以决定是否显示注释内容
-                            LogicNode ln = logicRoot[0] == null ? null : TreeHelper.findNode(logicRoot[0], node, root);
-                            StringBuilder html = new StringBuilder();
-                            html.append("<html><span style='color:#3C78FF;'>").append(esc.apply(idStr)).append("</span> ").append(contentHtml.toString());
-                            if (ln != null && ln.comments != null && !ln.comments.isEmpty()) {
-                                c.putClientProperty("hasComments", true);
-                                // 标记当前节点是否处于注释展开状态，用于渲染器在 paintComponent 中水平翻转角标
-                                c.putClientProperty("badgeFlipped", ln.showComments);
-                                // 先在文本末尾增加若干 &nbsp; 作为占位符（放在注释块之前，避免在 block 后产生单独空行）
-                                html.append("&nbsp;&nbsp;&nbsp;&nbsp;");
-                                if (ln.showComments) {
-                                    String commentHtml = esc.apply(ln.getCommentsAsHtml()).replace("\n","<br/>");
-                                    html.append("<div style='font-size:smaller;color:#666;margin-top:6px;'>").append(commentHtml).append("</div>");
-                                }
-                            } else {
-                                // 即便没有注释，也在末尾留一点空隙以保持视觉一致性
-                                html.append("&nbsp;&nbsp;");
-                            }
-                            html.append("</html>");
-                            c.setText(html.toString());
+                            prefix = full.substring(0, idx+1);
+                            content = full.substring(idx+1).trim();
+                        }
+                    } else if (full.startsWith("[")) {
+                        int idx = full.indexOf("]");
+                        if (idx > 0) {
+                            prefix = full.substring(0, idx+1);
+                            content = full.substring(idx+1).trim();
                         }
                     }
+                    // 将 content 按空格分词，对关键字上色
+                    String[] parts = content.split(" ");
+                    StringBuilder contentHtml = new StringBuilder();
+                    for (int i=0;i<parts.length;i++) {
+                        String p = parts[i];
+                        String clean = p.replaceAll("[^A-Za-z]", "");
+                        String lower = clean.toLowerCase();
+                        boolean isKeyword = "forall".equals(lower) || "exists".equals(lower) || "and".equals(lower) || "or".equals(lower) || "with".equals(lower) || "in".equals(lower) || "formula".equals(lower) || "implies".equals(lower) || "not".equals(lower) || "rules".equals(lower) || "rule".equals(lower);
+                        if (isKeyword) contentHtml.append("<span style='color:purple;'>").append(esc.apply(p)).append("</span>");
+                        else contentHtml.append("<span style='color:black;'>").append(esc.apply(p)).append("</span>");
+                        if (i<parts.length-1) contentHtml.append(" ");
+                    }
+                    StringBuilder html = new StringBuilder();
+                    html.append("<html>");
+                    if (!prefix.isEmpty()) {
+                        String color = prefix.startsWith("(") ? "#2E8B57" : "#3C78FF"; // 绿色 for rule, 蓝色 otherwise
+                        html.append("<span style='color:").append(color).append(";'>").append(esc.apply(prefix)).append("</span> ");
+                    }
+                    html.append(contentHtml.toString());
+                    if (ln != null && ln.comments != null && !ln.comments.isEmpty()) {
+                        c.putClientProperty("hasComments", true);
+                        c.putClientProperty("badgeFlipped", ln.showComments);
+                        html.append("&nbsp;&nbsp;&nbsp;&nbsp;");
+                        if (ln.showComments) {
+                            String commentHtml = esc.apply(ln.getCommentsAsHtml()).replace("\n","<br/>");
+                            html.append("<div style='font-size:smaller;color:#666;margin-top:6px;'>").append(commentHtml).append("</div>");
+                        }
+                    } else {
+                        html.append("&nbsp;&nbsp;");
+                    }
+                    html.append("</html>");
+                    c.setText(html.toString());
+                    Integer nodeId = (ln == null) ? null : ln.nodeId;
                     boolean markError = false;
                     if (nodeId != null && logic.LogicValidator.errorNodeMap.containsKey(nodeId)) {
                         markError = true;
@@ -240,7 +249,11 @@ public class ConstraintVisualizer {
         JScrollPane scroll = new JScrollPane(tree);
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setLeftComponent(scroll);
-        splitPane.setRightComponent(graphPanel);
+        // 右侧容器：顶部为 ruleLabel，中心为 graphPanel
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.add(ruleLabel, BorderLayout.NORTH);
+        rightPanel.add(graphPanel, BorderLayout.CENTER);
+        splitPane.setRightComponent(rightPanel);
         splitPane.setResizeWeight(0.5);
         frame.add(splitPane, BorderLayout.CENTER);
         JLabel status = new JLabel("Ready");
@@ -254,19 +267,8 @@ public class ConstraintVisualizer {
         JMenuItem export = new JMenuItem("导出PNG");
         fileMenu.add(open); fileMenu.add(save); fileMenu.add(export);
         bar.add(fileMenu);
-        // 编辑菜单，包含撤销
+        // 编辑菜单
         JMenu editMenu = new JMenu("编辑");
-        JMenuItem undoItem = new JMenuItem("撤销");
-        undoItem.setEnabled(logic.UndoManager.isUndoAvailable());
-        undoItem.addActionListener(new action.UndoAction(tree, root, logicRoot, nodeIdCounter, graphPanel, status));
-        // 订阅 UndoManager 变化以更新菜单项状态
-        logic.UndoManager.addListener(() -> {
-            // Swing 事件线程更新 UI
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                undoItem.setEnabled(logic.UndoManager.isUndoAvailable());
-            });
-        });
-        editMenu.add(undoItem);
         bar.add(editMenu);
         frame.setJMenuBar(bar);
 
@@ -277,12 +279,14 @@ public class ConstraintVisualizer {
         JMenuItem moveItem = new JMenuItem("移动");
         JMenuItem swapSubtreeItem = new JMenuItem("交换（全子树）");
         JMenuItem swapNodeItem = new JMenuItem("交换（单节点）");
-        JMenuItem copyNodeItem = new JMenuItem("复制-粘贴（全子树）");
+        JMenuItem copySingleItem = new JMenuItem("复制（单节点）");
+        JMenuItem copySubtreeItem = new JMenuItem("复制（全子树）");
+        JMenuItem pasteItem = new JMenuItem("粘贴");
         JMenuItem renameVarItem = new JMenuItem("变量重命名");
         JMenuItem editCommentsItem = new JMenuItem("编辑注释");
         editMenu.addSeparator();
         editMenu.add(addItem); editMenu.add(editItem); editMenu.add(delItem); editMenu.add(moveItem);
-        editMenu.add(swapSubtreeItem); editMenu.add(swapNodeItem); editMenu.add(copyNodeItem); editMenu.add(renameVarItem);
+        editMenu.add(swapSubtreeItem); editMenu.add(swapNodeItem); editMenu.add(copySingleItem); editMenu.add(copySubtreeItem); editMenu.add(pasteItem); editMenu.add(renameVarItem);
         editMenu.add(editCommentsItem);
 
         addItem.addActionListener(new AddNodeAction(frame, tree, root, logicRoot, nodeIdCounter, config, graphPanel, status, logic.LogicValidator.errorNodeMap));
@@ -291,7 +295,9 @@ public class ConstraintVisualizer {
         moveItem.addActionListener(new MoveNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         swapSubtreeItem.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         swapNodeItem.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        copyNodeItem.addActionListener(new CopyNodeAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
+        copySingleItem.addActionListener(new action.CopySingleAction(frame, tree, root, logicRoot));
+        copySubtreeItem.addActionListener(new action.CopySubtreeAction(frame, tree, root, logicRoot));
+        pasteItem.addActionListener(new action.PasteAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
         renameVarItem.addActionListener(new action.RenameVarAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         editCommentsItem.addActionListener(new action.EditCommentsAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
 
@@ -301,6 +307,58 @@ public class ConstraintVisualizer {
         JMenuItem collapseItem = new JMenuItem("收起");
         viewMenu.add(expandItem); viewMenu.add(collapseItem);
         bar.add(viewMenu);
+        // 在视图菜单右侧添加一个撤销按钮，便于快速访问
+        java.awt.event.ActionListener undoListener = new action.UndoAction(tree, root, logicRoot, nodeIdCounter, graphPanel, status);
+        JButton undoButton = new JButton("撤销");
+        undoButton.setToolTipText("撤销 (Ctrl+Z)");
+        // 让按钮更紧凑，确保在菜单栏上完整显示
+        undoButton.setMargin(new Insets(2,6,2,6));
+        undoButton.setEnabled(logic.UndoManager.isUndoAvailable());
+        undoButton.addActionListener(undoListener);
+        bar.add(undoButton);
+        // 更新 UndoManager 的监听器以同时维护按钮的 enabled 状态
+        logic.UndoManager.addListener(() -> {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                boolean avail = logic.UndoManager.isUndoAvailable();
+                undoButton.setEnabled(avail);
+            });
+        });
+        // 注册全局快捷键 Ctrl/Cmd+Z 到 root pane，触发与按钮相同的 UndoAction
+        try {
+            javax.swing.KeyStroke ks = javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
+            javax.swing.InputMap im = frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+            im.put(ks, "undoShortcut");
+            frame.getRootPane().getActionMap().put("undoShortcut", new javax.swing.AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    undoListener.actionPerformed(new java.awt.event.ActionEvent(undoButton, java.awt.event.ActionEvent.ACTION_PERFORMED, "shortcut"));
+                }
+            });
+            // 注册 Ctrl+C -> 复制（单节点），Ctrl+V -> 粘贴
+            javax.swing.KeyStroke ksC = javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
+            javax.swing.KeyStroke ksV = javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_V, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
+            // 给菜单项设置 accelerator（显示在菜单里并在窗口有焦点时响应）
+            copySingleItem.setAccelerator(ksC);
+            pasteItem.setAccelerator(ksV);
+            // 额外在 RootPane 的 InputMap/ActionMap 上绑定，确保在任何组件时也可触发
+            frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ksC, "copyShortcut");
+            frame.getRootPane().getActionMap().put("copyShortcut", new javax.swing.AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) { copySingleItem.doClick(); }
+            });
+            frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(ksV, "pasteShortcut");
+            frame.getRootPane().getActionMap().put("pasteShortcut", new javax.swing.AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) { pasteItem.doClick(); }
+            });
+            // 同时在树组件上也绑定，便于当树有键盘焦点时响应
+            tree.getInputMap(JComponent.WHEN_FOCUSED).put(ksC, "copyShortcutTree");
+            tree.getActionMap().put("copyShortcutTree", new javax.swing.AbstractAction() { public void actionPerformed(java.awt.event.ActionEvent e) { copySingleItem.doClick(); } });
+            tree.getInputMap(JComponent.WHEN_FOCUSED).put(ksV, "pasteShortcutTree");
+            tree.getActionMap().put("pasteShortcutTree", new javax.swing.AbstractAction() { public void actionPerformed(java.awt.event.ActionEvent e) { pasteItem.doClick(); } });
+        } catch (Throwable t) {
+            // ignore binding failures
+        }
         expandItem.addActionListener(e -> {
             TreePath path = tree.getSelectionPath();
             if (path == null) return;
@@ -314,9 +372,9 @@ public class ConstraintVisualizer {
             ConstraintVisualizer.collapseSubtree(tree, sel);
         });
 
-        // 构建节点右键菜单：包含编辑菜单和视图菜单中的操作（除了撤回）
+        // 构建节点右键菜单：包含编辑菜单和视图菜单中的操作
         final JPopupMenu nodePopup = new JPopupMenu();
-    java.util.List<JMenuItem> popupItems = java.util.Arrays.asList(addItem, editItem, delItem, moveItem, swapSubtreeItem, swapNodeItem, copyNodeItem, renameVarItem, editCommentsItem, expandItem, collapseItem);
+        java.util.List<JMenuItem> popupItems = java.util.Arrays.asList(addItem, editItem, delItem, moveItem, swapSubtreeItem, swapNodeItem, copySingleItem, copySubtreeItem, pasteItem, renameVarItem, editCommentsItem, expandItem, collapseItem);
         for (JMenuItem src : popupItems) {
             JMenuItem pi = new JMenuItem(src.getText());
             // 通过触发原菜单项的 doClick() 来复用其行为和现有监听器
@@ -379,11 +437,29 @@ public class ConstraintVisualizer {
                         int targetOffsetY = (int)(viewH/2 - cy * graphPanel.getScale());
                         graphPanel.setOffset(targetOffsetX, targetOffsetY);
                     }
+                    // 更新 ruleLabel：若当前有高亮且其 ruleId>0，则尝试查找该 rule 下 localId==1 的节点，未找到则显示 null；
+                    // 若无高亮，则显示 null
+                    Integer displayedRuleId = null;
+                    Integer hid = graphPanel.getHighlightNodeId();
+                    if (hid != null) {
+                        LogicNode highlighted = logic.LogicUiUtil.findNodeById(logicRoot[0], hid);
+                        if (highlighted != null) {
+                            LogicNode firstInRule = logic.LogicUiUtil.findNodeByRuleAndLocal(logicRoot[0], highlighted.ruleId, 1);
+                            if (firstInRule != null) displayedRuleId = highlighted.ruleId;
+                            else displayedRuleId = null;
+                        }
+                    }
+                    if (displayedRuleId == null) ruleLabel.setText("ruleId: null");
+                    else ruleLabel.setText("ruleId: (" + displayedRuleId + ")");
                 } else {
                     graphPanel.setHighlightNodeId(null);
+                    // 无选中时也更新 label（同上分支）
+                    ruleLabel.setText("ruleId: null");
                 }
             } else {
                 graphPanel.setHighlightNodeId(null);
+                // 无选中时也更新 label（同上分支）
+                ruleLabel.setText("ruleId: null");
             }
         });
         open.addActionListener(new OpenXmlAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status));
@@ -395,9 +471,9 @@ public class ConstraintVisualizer {
             JFileChooser fc = new JFileChooser(System.getProperty("user.dir"));
             if (fc.showSaveDialog(frame)==JFileChooser.APPROVE_OPTION) {
                 try {
-                    logic.LogicNode logic = logicRoot[0];
+                    LogicNode logic = logicRoot[0];
                     LogicGraphSvgExporter svgExporter = new LogicGraphSvgExporter();
-                    String svg = svgExporter.exportSvg(logic);
+                    String svg = svgExporter.exportSvg(logic, graphPanel.getHighlightNodeId());
                     java.nio.file.Files.write(fc.getSelectedFile().toPath(), svg.getBytes("UTF-8"));
                     status.setText("SVG导出成功");
                 } catch (Exception ex) {
@@ -421,6 +497,9 @@ public class ConstraintVisualizer {
             logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
             ((DefaultTreeModel)tree.getModel()).reload();
             graphPanel.setLogicRoot(logicRoot[0]);
+            // 初始时更新 ruleLabel：若存在第一个 rule 的 localId==1 则显示其 ruleId，否则 null
+            LogicNode firstRuleFirst = logic.LogicUiUtil.findNodeByRuleAndLocal(logicRoot[0], 1, 1);
+            if (firstRuleFirst != null) ruleLabel.setText("ruleId: (1)"); else ruleLabel.setText("ruleId: null");
             status.setText("已预加载空约束公式");
         } catch (Exception ex) {
             status.setText("预加载XML失败: "+ex.getMessage());

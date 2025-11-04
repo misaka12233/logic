@@ -3,6 +3,9 @@ import java.util.*;
 
 public class LogicNode {
     public int nodeId = 0; // 可视化编号
+    // rule 层级编号与节点在 rule 内的局部编号（用于展示）
+    public int ruleId = 0;
+    public int localId = 0;
     public NodeType type;
     public Map<String, String> params = new LinkedHashMap<>();
     public List<Map<String,String>> paramList = new ArrayList<>();
@@ -56,7 +59,16 @@ public class LogicNode {
                 }
                 break;
         }
-        return "[" + nodeId + "] " + label;
+        String prefix = "";
+        if (type == NodeType.RULES) {
+            prefix = ""; // rules 节点不显示编号
+        } else if (type == NodeType.RULE || type == NodeType.UNKNOWN) {
+            // RULE 与 UNKNOWN 节点显示 ruleId（例如 (1)），UNKNOWN 不参与 localId 计数
+            prefix = "(" + ruleId + ") ";
+        } else {
+            prefix = "[" + localId + "] ";
+        }
+        return prefix + label;
     }
     private String paramListStr() {
         if (paramList.isEmpty()) return "()";

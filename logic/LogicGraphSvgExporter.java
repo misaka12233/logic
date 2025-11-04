@@ -14,13 +14,31 @@ public class LogicGraphSvgExporter {
     private int svgWidth = 1200;
     private int svgHeight = 1200;
 
-    public String exportSvg(LogicNode root) {
+    public String exportSvg(LogicNode root, Integer highlightedNodeId) {
         nodeBounds = new HashMap<>();
         nodeSizes = new HashMap<>();
         // 计算尺寸
-        calcNodeSizes(root);
+        // 选择用于导出的显示根（与运行时绘制一致）：
+        LogicNode displayRoot = null;
+        if (highlightedNodeId != null) {
+            LogicNode highlighted = LogicUiUtil.findNodeById(root, highlightedNodeId);
+            if (highlighted != null && highlighted.ruleId > 0) {
+                LogicNode firstInRule = LogicUiUtil.findNodeByRuleAndLocal(root, highlighted.ruleId, 1);
+                if (firstInRule != null) displayRoot = firstInRule;
+            }
+        }
+        if (displayRoot == null) {
+            // 未找到合适的 display root：返回空的 SVG（不包含图像）
+            StringBuilder empty = new StringBuilder();
+            empty.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+            empty.append("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0\" height=\"0\">\n");
+            empty.append("</svg>\n");
+            return empty.toString();
+        }
+
+        calcNodeSizes(displayRoot);
         int[] y = {vGap};
-        layoutTree(root, 0, y); // 先布局，左上角为(0, vGap)
+        layoutTree(displayRoot, 0, y); // 先布局，左上角为(0, vGap)
         // 计算边界
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
         for (Rectangle rect : nodeBounds.values()) {
@@ -44,9 +62,9 @@ public class LogicGraphSvgExporter {
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"").append(svgWidth).append("\" height=\"").append(svgHeight).append("\">\n");
         // 连线
-        drawEdges(sb, root);
+        drawEdges(sb, displayRoot);
         // 节点
-        drawNodes(sb, root);
+        drawNodes(sb, displayRoot);
         sb.append("</svg>\n");
         return sb.toString();
     }
@@ -120,16 +138,24 @@ public class LogicGraphSvgExporter {
         int rx = 12, ry = 12;
         // 背景
         sb.append("<rect x=\"").append(rect.x).append("\" y=\"").append(rect.y).append("\" width=\"").append(nodeWidth).append("\" height=\"").append(nodeHeight).append("\" rx=\"").append(rx).append("\" ry=\"").append(ry).append("\" fill=\"white\" stroke=\"black\" stroke-width=\"1.5\"/>");
-        // 文本：编号蓝色，关键字紫色，其余黑色，同行显示
+        // 文本：RULE 前缀为绿色 (ruleId)，其它节点编号为蓝色 [localId]
         String text = node.toString();
-        String nodeIdStr = "[" + node.nodeId + "]";
-        int fontSize = 14;
+        String prefix = "";
         String content = text;
-        if (content.startsWith(nodeIdStr)) content = content.substring(nodeIdStr.length()).trim();
+        if (node.type == LogicNode.NodeType.RULE || node.type == LogicNode.NodeType.UNKNOWN) {
+            prefix = "(" + node.ruleId + ")";
+            if (content.startsWith(prefix)) content = content.substring(prefix.length()).trim();
+        } else if (node.type != LogicNode.NodeType.RULES) {
+            prefix = "[" + node.localId + "]";
+            if (content.startsWith(prefix)) content = content.substring(prefix.length()).trim();
+        }
+        int fontSize = 14;
         sb.append("<text x=\"").append(rect.x + nodeWidth/2).append("\" y=\"").append(rect.y + nodeHeight/2).append("\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"").append(fontSize).append("\" font-family=\"SansSerif\">\n");
-        // 编号（蓝色）居中段
-        sb.append("  <tspan fill='#3C78FF'>").append(escapeXml(nodeIdStr)).append("</tspan>");
-        sb.append("\n  ");
+        if (!prefix.isEmpty()) {
+            String color = (node.type == LogicNode.NodeType.RULE || node.type == LogicNode.NodeType.UNKNOWN) ? "#2E8B57" : "#3C78FF";
+            sb.append("  <tspan fill='").append(color).append("'>").append(escapeXml(prefix)).append("</tspan>");
+            sb.append("\n  ");
+        }
         // 内容逐词输出，关键字用紫色
         String[] parts = content.split(" ");
         for (int i=0;i<parts.length;i++) {
