@@ -8,6 +8,96 @@ public class LogicValidator {
     public static void validateAllNodes(logic.LogicNode node) {
         errorNodeMap.clear();
         validateAllNodesRec(node, null, new java.util.LinkedHashMap<>());
+        // 额外校验 ID 与 GROUP_BY 类型的约束：
+        // ID:
+        // - ID 节点的父节点必须是 RULE
+        // - 每个 rule 节点下有且仅有一个 ID 节点
+        // - 所有 ID 节点的 content 在全局范围内不可重复
+        // GROUP_BY:
+        // - GROUP_BY 节点的父节点必须是 RULE
+        // - 每个 rule 节点下有且仅有一个 GROUP_BY 节点
+        validateIdAndGroupByConstraints(node);
+    }
+
+    private static void validateIdAndGroupByConstraints(logic.LogicNode root) {
+        java.util.Map<String, Integer> idContentToNode = new java.util.HashMap<>();
+        // 递归遍历
+        java.util.function.BiConsumer<logic.LogicNode, logic.LogicNode.NodeType> rec = new java.util.function.BiConsumer<logic.LogicNode, logic.LogicNode.NodeType>() {
+            @Override
+            public void accept(logic.LogicNode node, logic.LogicNode.NodeType parentType) {
+                // ID 节点：父类型必须为 RULE，content 必须非空且全局唯一
+                if (node.type == logic.LogicNode.NodeType.ID) {
+                    if (parentType != logic.LogicNode.NodeType.RULE) {
+                        String prev = errorNodeMap.get(node.nodeId);
+                        String msg = "ID 节点的父节点必须是 rule";
+                        if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                        else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    }
+                    if (node.content == null || node.content.trim().isEmpty()) {
+                        String prev = errorNodeMap.get(node.nodeId);
+                        String msg = "ID 节点缺少 content";
+                        if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                        else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    } else {
+                        String c = node.content.trim();
+                        if (idContentToNode.containsKey(c)) {
+                            int prevId = idContentToNode.get(c);
+                            String prevMsg = errorNodeMap.get(node.nodeId);
+                            String msg = "ID content 重复: " + c;
+                            if (prevMsg == null) errorNodeMap.put(node.nodeId, msg);
+                            else errorNodeMap.put(node.nodeId, prevMsg + "; " + msg);
+                            String otherPrev = errorNodeMap.get(prevId);
+                            if (otherPrev == null) errorNodeMap.put(prevId, msg);
+                            else errorNodeMap.put(prevId, otherPrev + "; " + msg);
+                        } else {
+                            idContentToNode.put(c, node.nodeId);
+                        }
+                    }
+                }
+
+                // GROUP_BY 节点：父类型必须为 RULE；content 可为空视为错误
+                if (node.type == logic.LogicNode.NodeType.GROUP_BY) {
+                    if (parentType != logic.LogicNode.NodeType.RULE) {
+                        String prev = errorNodeMap.get(node.nodeId);
+                        String msg = "GROUP_BY 节点的父节点必须是 rule";
+                        if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                        else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    }
+                    if (node.content == null || node.content.trim().isEmpty()) {
+                        String prev = errorNodeMap.get(node.nodeId);
+                        String msg = "GROUP_BY 节点缺少 content";
+                        if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                        else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    }
+                }
+
+                // 如果是 rule 节点，统计其直接子节点中 ID 与 GROUP_BY 的数量（必须且仅有一个）
+                if (node.type == logic.LogicNode.NodeType.RULE) {
+                    int idCount = 0;
+                    int gbCount = 0;
+                    for (logic.LogicNode c : node.children) {
+                        if (c.type == logic.LogicNode.NodeType.ID) idCount++;
+                        if (c.type == logic.LogicNode.NodeType.GROUP_BY) gbCount++;
+                    }
+                    if (idCount != 1) {
+                        String prev = errorNodeMap.get(node.nodeId);
+                        String msg = "rule 下必须且仅有一个 ID 节点 (当前=" + idCount + ")";
+                        if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                        else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    }
+                    if (gbCount != 1) {
+                        String prev = errorNodeMap.get(node.nodeId);
+                        String msg = "rule 下必须且仅有一个 GROUP_BY 节点 (当前=" + gbCount + ")";
+                        if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                        else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    }
+                }
+
+                // 递归
+                for (logic.LogicNode c : node.children) this.accept(c, node.type);
+            }
+        };
+        rec.accept(root, null);
     }
     /**
      * 递归校验所有节点，增加变量作用域检查：
@@ -137,7 +227,7 @@ public class LogicValidator {
                 if (!node.params.containsKey("name")) return "bfunc 缺少 name 参数";
                 if (!node.children.isEmpty()) return "bfunc不能有子公式";
                 break;
-            case IMPLIES:
+            case IMPLIES: case AND: case OR:
                 if (node.children.size()!=2) return node.type.name().toLowerCase()+"节点必须有2个子公式";
                 break;
             case NOT:
@@ -147,9 +237,6 @@ public class LogicValidator {
                 // formula 的父节点必须是 rule
                 if (parentType != logic.LogicNode.NodeType.RULE) return "formula 的父节点必须是 rule";
                 if (node.children.size() > 1) return "FORMULA类型的子节点不能超过1个";
-                break;
-            case AND: case OR:
-                if (node.children.size() < 1) return node.type.name().toLowerCase()+"节点必须有子公式";
                 break;
             default:
                 // unknown 节点只能出现在 rule 或 rules 之下

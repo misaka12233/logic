@@ -12,9 +12,10 @@ public class CopySingleAction implements ActionListener {
     private final JTree tree;
     private final DefaultMutableTreeNode root;
     private final LogicNode[] logicRoot;
+    private final LogicGraphPanel graphPanel;
 
-    public CopySingleAction(JFrame frame, JTree tree, DefaultMutableTreeNode root, LogicNode[] logicRoot) {
-        this.frame = frame; this.tree = tree; this.root = root; this.logicRoot = logicRoot;
+    public CopySingleAction(JFrame frame, JTree tree, DefaultMutableTreeNode root, LogicNode[] logicRoot, LogicGraphPanel graphPanel) {
+        this.frame = frame; this.tree = tree; this.root = root; this.logicRoot = logicRoot; this.graphPanel = graphPanel;
     }
 
     @Override
@@ -27,6 +28,12 @@ public class CopySingleAction implements ActionListener {
         // 将单节点模板写入缓冲区（不包含子节点）
         logic.CopyBuffer.template = NodeCopyUtil.makeTemplateCopy(ln, false);
         logic.CopyBuffer.isSubtree = false;
+        java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+        Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
+        logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+        ((javax.swing.tree.DefaultTreeModel)tree.getModel()).reload();
+        logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
+        graphPanel.setLogicRoot(logicRoot[0]);
         JOptionPane.showMessageDialog(frame, "已复制单节点到缓冲区。", "复制", JOptionPane.INFORMATION_MESSAGE);
     }
 }

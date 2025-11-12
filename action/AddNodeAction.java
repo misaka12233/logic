@@ -52,6 +52,7 @@ public class AddNodeAction implements ActionListener {
         java.util.List<java.util.Map<String,String>> paramList = new java.util.ArrayList<>();
         Map<String,String> filter = new LinkedHashMap<>();
         java.util.List<java.util.Map<String,String>> filterParamList = new java.util.ArrayList<>();
+        String newContent = null;
         switch(type) {
             case FORALL: case EXISTS: {
                 String v = JOptionPane.showInputDialog(frame,"变量名(var):");
@@ -103,6 +104,13 @@ public class AddNodeAction implements ActionListener {
                 }
                 break;
             }
+            case ID: case GROUP_BY: {
+                String prompt = (type == LogicNode.NodeType.ID) ? "输入 ID 内容(content):" : "输入 GROUP_BY 内容(content):";
+                String content = JOptionPane.showInputDialog(frame, prompt);
+                if (content == null) return; // 用户取消
+                newContent = content;
+                break;
+            }
             default:
         }
         LogicNode newNode = new LogicNode(type, nodeIdCounter[0]++);
@@ -110,15 +118,17 @@ public class AddNodeAction implements ActionListener {
         newNode.paramList.addAll(paramList);
         newNode.filter.putAll(filter);
         newNode.filterParamList.addAll(filterParamList);
+        newNode.content = newContent;
         // 保存快照以支持撤销（包括 UI 状态）
         logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
-    ln.children.add(newNode);
-    // 保存当前展开 id 列表与选中 id，以便重建后准确恢复 UI 状态
-    java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
-    Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
-    logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
-    ((DefaultTreeModel)tree.getModel()).reload();
-    logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
+        // 插入为第一个子节点（而不是追加到末尾）
+        ln.children.add(0, newNode);
+        // 保存当前展开 id 列表与选中 id，以便重建后准确恢复 UI 状态
+        java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
+        Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
+        logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
+        ((DefaultTreeModel)tree.getModel()).reload();
+        logic.SwingTreeUtil.applyUiState(tree, root, expandedIds, selectedId);
         graphPanel.setLogicRoot(logicRoot[0]);
         // 实时校验
         // 需传入全局errorNodeMap

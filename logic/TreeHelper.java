@@ -32,7 +32,12 @@ public class TreeHelper {
     }
     // 查找节点
     public static LogicNode findNode(LogicNode logic, DefaultMutableTreeNode swing, DefaultMutableTreeNode swingRoot) {
-        if (swing==swingRoot) return logic;
+        // 优先直接使用 Swing 节点绑定的 LogicNode（buildSwingTree 时将 LogicNode 存入 userObject）
+        if (swing == null) return null;
+        if (swing == swingRoot) return logic;
+        Object uo = swing.getUserObject();
+        if (uo instanceof LogicNode) return (LogicNode)uo;
+        // 兼容老逻辑：回退到基于路径标签的查找（若 userObject 非 LogicNode）
         TreeNode[] path = swing.getPath();
         LogicNode cur = logic;
         for (int i=1;i<path.length;i++) {
@@ -45,6 +50,12 @@ public class TreeHelper {
     }
     // 查找父节点
     public static LogicNode findParent(LogicNode logic, DefaultMutableTreeNode swing, DefaultMutableTreeNode swingRoot) {
+        if (swing == null) return null;
+        DefaultMutableTreeNode parentSwing = (DefaultMutableTreeNode)swing.getParent();
+        if (parentSwing == null || parentSwing == swingRoot) return logic;
+        Object uo = parentSwing.getUserObject();
+        if (uo instanceof LogicNode) return (LogicNode)uo;
+        // 兼容回退：基于路径标签查找父节点
         TreeNode[] path = swing.getPath();
         if (path.length<=2) return null;
         LogicNode cur = logic;

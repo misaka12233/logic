@@ -78,6 +78,27 @@ public class LogicUiUtil {
         return null;
     }
 
+    // 判断 subtree 中是否包含指定 nodeId
+    public static boolean containsNode(LogicNode node, int targetId) {
+        if (node == null) return false;
+        if (node.nodeId == targetId) return true;
+        for (LogicNode c : node.children) if (containsNode(c, targetId)) return true;
+        return false;
+    }
+
+    // 查找包含指定节点的最近上层 RULE 节点（如果目标自身是 RULE 则返回自身）
+    public static LogicNode findRuleForNode(LogicNode root, int targetId) {
+        if (root == null) return null;
+        if (!containsNode(root, targetId)) return null;
+        if (root.type == LogicNode.NodeType.RULE && containsNode(root, targetId)) return root;
+        for (LogicNode c : root.children) {
+            if (containsNode(c, targetId)) {
+                return findRuleForNode(c, targetId);
+            }
+        }
+        return null;
+    }
+
     private static void assignLocalIdsRec(LogicNode node, int ruleId, java.util.concurrent.atomic.AtomicInteger counter) {
         for (LogicNode c : node.children) {
             if (c.type == LogicNode.NodeType.RULE) {
@@ -85,7 +106,7 @@ public class LogicUiUtil {
                 c.ruleId = ruleId;
                 c.localId = 0;
                 assignLocalIdsRec(c, ruleId, counter);
-            } else if (c.type == LogicNode.NodeType.UNKNOWN) {
+            } else if (c.type == LogicNode.NodeType.UNKNOWN || c.type == LogicNode.NodeType.ID || c.type == LogicNode.NodeType.GROUP_BY) {
                 // UNKNOWN 节点也显示 ruleId，但不参与 localId 编号（不消耗计数器）
                 c.ruleId = ruleId;
                 c.localId = 0;

@@ -10,6 +10,8 @@ public class LogicXmlUtil {
         switch(tag) {
             case "rules": type = LogicNode.NodeType.RULES; break;
             case "rule": type = LogicNode.NodeType.RULE; break;
+            case "id": type = LogicNode.NodeType.ID; break;
+            case "group-by": type = LogicNode.NodeType.GROUP_BY; break;
             case "forall": type = LogicNode.NodeType.FORALL; break;
             case "exists": type = LogicNode.NodeType.EXISTS; break;
             case "and": type = LogicNode.NodeType.AND; break;
@@ -25,7 +27,13 @@ public class LogicXmlUtil {
         if (type == LogicNode.NodeType.UNKNOWN) {
             node.unknownTag = tag;
             String txt = e.getTextContent();
-            node.unknownContent = txt == null ? "" : txt.trim();
+            node.content = txt == null ? "" : txt.trim();
+        }
+        // 如果是 ID 或 GROUP_BY 类型，将元素的文本内容作为 content 字段保存
+        if (type == LogicNode.NodeType.ID || type == LogicNode.NodeType.GROUP_BY) {
+            String txt = e.getTextContent();
+            node.content = txt == null ? "" : txt.trim();
+            // 这些节点通常没有结构化子节点，我们可以直接返回（但仍允许属性）
         }
         NamedNodeMap attrs = e.getAttributes();
         for (int i=0;i<attrs.getLength();i++) {
@@ -75,13 +83,13 @@ public class LogicXmlUtil {
                     }
                 } else {
                     // child is a logic sub-node
-                    LogicNode childLogic = parseXml(ce, nodeIdCounter);
-                    // attach any pending comments (concatenate as separate entries)
-                    if (!pendingComments.isEmpty()) {
-                        childLogic.comments.addAll(pendingComments);
-                        pendingComments.clear();
-                    }
-                    node.children.add(childLogic);
+                        LogicNode childLogic = parseXml(ce, nodeIdCounter);
+                        // attach any pending comments (concatenate as separate entries)
+                        if (!pendingComments.isEmpty()) {
+                            childLogic.comments.addAll(pendingComments);
+                            pendingComments.clear();
+                        }
+                        node.children.add(childLogic);
                 }
             }
         }
@@ -98,6 +106,8 @@ public class LogicXmlUtil {
         switch(node.type) {
             case RULES: tag = "rules"; break;
             case RULE: tag = "rule"; break;
+            case ID: tag = "id"; break;
+            case GROUP_BY: tag = "group-by"; break;
             case FORALL: tag = "forall"; break;
             case EXISTS: tag = "exists"; break;
             case AND: tag = "and"; break;
@@ -142,10 +152,14 @@ public class LogicXmlUtil {
             }
             e.appendChild(filterE);
         }
+        if (node.type == LogicNode.NodeType.ID || node.type == LogicNode.NodeType.GROUP_BY) {
+            if (node.content != null) e.appendChild(doc.createTextNode(node.content));
+            return e;
+        }
         // If this is an UNKNOWN node and we have preserved textual content (and no structured children/params),
         // write it back as text content so the original payload is preserved.
         if (node.type == LogicNode.NodeType.UNKNOWN) {
-            String uc = node.unknownContent;
+            String uc = node.content;
             boolean hasStructuredChildren = !node.children.isEmpty() || !node.paramList.isEmpty() || !node.filter.isEmpty();
             if (uc != null && !uc.isEmpty() && !hasStructuredChildren) {
                 e.appendChild(doc.createTextNode(uc));

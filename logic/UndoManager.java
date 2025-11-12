@@ -9,51 +9,40 @@ import javax.xml.transform.TransformerFactory;
 
 import java.io.File;
 
+/**
+ * UndoManager: 支持磁盘持久化的多步撤销（环形缓冲）。
+ * 默认保留最近 20 步快照（可根据需要调整 MAX_UNDO）。
+ */
 public class UndoManager {
+    // 最大撤销步数（合理折中，既能回退多步，又不会占用过多磁盘）
+    private static final int MAX_UNDO = 20;
+
     private static boolean undoAvailable = false;
-    private static final String TMP_PATH = System.getProperty("user.dir") + File.separator + "temporary.xml";
-    private static final String TMP_META = System.getProperty("user.dir") + File.separator + "temporary_state.json";
+    private static final String UNDO_DIR = System.getProperty("user.dir") + File.separator + ".undo";
+    // 保留旧的单文件路径作为兼容回退
     private static boolean saved = true; // whether current model is saved to disk
     private static java.util.List<java.lang.Runnable> listeners = new java.util.ArrayList<>();
 
-    // 保存当前逻辑树为临时文件
+    // 环形缓冲元数据
+    private static int nextIndex = 0; // 下一个写入槽位
+    private static int size = 0; // 当前可撤销快照数
+    private static int lastRestoredIndex = -1; // 上次 restore 使用的槽位
+
+    // 保存当前逻辑树为临时文件（写入环形缓冲）
     public static void saveSnapshot(LogicNode root) {
         try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            DocumentBuilder db = dbf.newDocumentBuilder();
-            Document doc = db.newDocument();
-            // 如果根节点有注释，先写入文档注释（保留在元素之前）
-            if (root.comments != null && !root.comments.isEmpty()) {
-                StringBuilder cs = new StringBuilder();
-                for (int i=0;i<root.comments.size();i++) {
-                    if (i>0) cs.append("\n");
-                    cs.append(root.comments.get(i));
-                }
-                doc.appendChild(doc.createComment(cs.toString()));
-            }
-            doc.appendChild(LogicXmlUtil.toXml(root, doc));
-            TransformerFactory tf = TransformerFactory.newInstance();
-            javax.xml.transform.Transformer t = tf.newTransformer();
-            t.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes");
-            t.transform(new javax.xml.transform.dom.DOMSource(doc), new javax.xml.transform.stream.StreamResult(new File(TMP_PATH)));
-            undoAvailable = true;
-            // notify listeners
-            for (java.lang.Runnable r : listeners) {
-                try { r.run(); } catch(Exception ex) { }
-            }
+            writeSnapshotAndGetIndex(root);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 
     /**
-     * 带 UI 状态的快照：保存模型 XML（temporary.xml）并把树的展开/选中状态写入 temporary_state.json
+     * 带 UI 状态的快照：保存模型 XML 到环形槽，并把树的展开/选中状态写入对应的 meta 文件
      */
     public static void saveSnapshot(LogicNode root, javax.swing.JTree tree, javax.swing.tree.DefaultMutableTreeNode swingRoot) {
-        // 标记当前模型为未保存（用户已对模型做出更改）
-        saved = false;
-        // 先保存模型
-        saveSnapshot(root);
+        int idx = -1;
+        try { idx = writeSnapshotAndGetIndex(root); } catch(Exception ex) { ex.printStackTrace(); }
         try {
             java.util.List<Integer> expanded = logic.SwingTreeUtil.collectExpandedIds(tree, swingRoot);
             Integer sel = logic.SwingTreeUtil.findSelectedNodeId(tree);
@@ -69,31 +58,95 @@ public class UndoManager {
             sb.append("\"saved\":");
             sb.append(saved ? "true" : "false");
             sb.append("}");
-            java.nio.file.Files.write(new java.io.File(TMP_META).toPath(), sb.toString().getBytes("UTF-8"));
-            // notify listeners (already done in saveSnapshot(root))
+            if (idx >= 0) java.nio.file.Files.write(new java.io.File(slotMetaPath(idx)).toPath(), sb.toString().getBytes("UTF-8"));
+            // 标记当前模型为未保存（用户已对模型做出更改）
+            saved = false;
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 
+    // helper: ensure undo directory exists
+    private static void ensureUndoDir() {
+        try {
+            java.io.File d = new java.io.File(UNDO_DIR);
+            if (!d.exists()) d.mkdirs();
+        } catch (Exception ex) { }
+    }
+
+    private static String slotXmlPath(int idx) {
+        return UNDO_DIR + File.separator + "temporary_" + idx + ".xml";
+    }
+
+    private static String slotMetaPath(int idx) {
+        return UNDO_DIR + File.separator + "temporary_state_" + idx + ".json";
+    }
+
+    // 写入 XML 到当前槽位并返回槽位索引
+    private static int writeSnapshotAndGetIndex(LogicNode root) throws Exception {
+        ensureUndoDir();
+        int idx = nextIndex;
+        // 构造 Document
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilder db = dbf.newDocumentBuilder();
+        Document doc = db.newDocument();
+        if (root.comments != null && !root.comments.isEmpty()) {
+            StringBuilder cs = new StringBuilder();
+            for (int i=0;i<root.comments.size();i++) {
+                if (i>0) cs.append("\n");
+                cs.append(root.comments.get(i));
+            }
+            doc.appendChild(doc.createComment(cs.toString()));
+        }
+        doc.appendChild(LogicXmlUtil.toXml(root, doc));
+        TransformerFactory tf = TransformerFactory.newInstance();
+        javax.xml.transform.Transformer t = tf.newTransformer();
+        t.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes");
+        t.transform(new javax.xml.transform.dom.DOMSource(doc), new javax.xml.transform.stream.StreamResult(new java.io.File(slotXmlPath(idx))));
+
+        // 更新环形缓冲索引/计数
+        nextIndex = (nextIndex + 1) % MAX_UNDO;
+        if (size < MAX_UNDO) size++;
+        undoAvailable = size > 0;
+        // notify listeners
+        for (java.lang.Runnable r : listeners) {
+            try { r.run(); } catch(Exception ex) { }
+        }
+        return idx;
+    }
+
     // 恢复临时文件到逻辑树，返回解析得到的根节点
     public static LogicNode restoreSnapshot() throws Exception {
-        File f = new File(TMP_PATH);
+        if (size <= 0) return null;
+        // 最新的快照位于 nextIndex - 1
+        int idx = (nextIndex - 1 + MAX_UNDO) % MAX_UNDO;
+        java.io.File f = new java.io.File(slotXmlPath(idx));
         if (!f.exists()) return null;
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         DocumentBuilder db = dbf.newDocumentBuilder();
         org.w3c.dom.Document doc = db.parse(f);
         Element fe = (Element) doc.getDocumentElement();
         int[] counter = new int[]{1};
+        // 更新索引/计数：将 nextIndex 回退到该槽位（覆盖行为留给下一次 save）
+        nextIndex = idx;
+        size = Math.max(0, size - 1);
+        undoAvailable = size > 0;
+        lastRestoredIndex = idx;
+        // notify listeners
+        for (java.lang.Runnable r : listeners) {
+            try { r.run(); } catch(Exception ex) { }
+        }
         return LogicXmlUtil.parseXml(fe, counter);
     }
 
     /**
-     * 读取 previously saved UI state (temporary_state.json)。返回 pair: expandedIds list and selectedId (may be null).
+     * 读取 previously saved UI state。优先读取最后一次 restore 使用的 meta 槽文件，否则回退到旧的 TMP_META。
      */
     public static java.util.Map<String, Object> restoreUiState() {
         java.util.Map<String,Object> out = new java.util.HashMap<>();
-        java.io.File f = new java.io.File(TMP_META);
+        // 优先读取最后一次 restore 使用的 meta 文件
+        java.io.File f = null;
+        if (lastRestoredIndex >= 0) f = new java.io.File(slotMetaPath(lastRestoredIndex));
         if (!f.exists()) return out;
         try {
             String s = new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8");
@@ -158,13 +211,19 @@ public class UndoManager {
 
     public static void clearTemporaryFiles() {
         try {
-            java.io.File f1 = new java.io.File(TMP_PATH);
-            java.io.File f2 = new java.io.File(TMP_META);
-            if (f1.exists()) f1.delete();
-            if (f2.exists()) f2.delete();
+            // 删除 .undo 目录内所有文件
+            java.io.File d = new java.io.File(UNDO_DIR);
+            if (d.exists() && d.isDirectory()) {
+                for (java.io.File f : d.listFiles()) {
+                    try { f.delete(); } catch(Exception ex) {}
+                }
+            }
         } catch (Exception ex) { }
         undoAvailable = false;
         saved = true;
+        nextIndex = 0;
+        size = 0;
+        lastRestoredIndex = -1;
         for (java.lang.Runnable r : listeners) {
             try { r.run(); } catch(Exception ex) {}
         }

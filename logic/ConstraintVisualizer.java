@@ -96,8 +96,8 @@ public class ConstraintVisualizer {
         tree.setFont(new Font("SansSerif", Font.PLAIN, 18));
         // 右侧有向图可视化面板
         LogicGraphPanel graphPanel = new LogicGraphPanel();
-        // 在图上方显示当前 ruleId 的文本框（只读标签）
-        JLabel ruleLabel = new JLabel("ruleId: null");
+    // 在图上方显示当前 Rule 的 ID 节点 content（只读标签）
+    JLabel idLabel = new JLabel("ID: null");
         // 点击JTree空白处取消选中；同时支持点击注释角标切换注释显示
         tree.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -151,7 +151,6 @@ public class ConstraintVisualizer {
                     if (uo instanceof LogicNode) ln = (LogicNode)uo;
                     // 文本与编号前缀由 LogicNode.toString() 提供，但我们需要把编号着色：
                     // - RULES: 无编号
-                    // - RULE: 前置 (ruleId) 用绿色
                     // - 其它: 前置 [localId] 用蓝色
                     String full = (uo == null) ? "" : uo.toString();
                     java.util.function.Function<String,String> esc = (str) -> str.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
@@ -185,7 +184,7 @@ public class ConstraintVisualizer {
                     StringBuilder html = new StringBuilder();
                     html.append("<html>");
                     if (!prefix.isEmpty()) {
-                        String color = prefix.startsWith("(") ? "#2E8B57" : "#3C78FF"; // 绿色 for rule, 蓝色 otherwise
+                        String color = "#3C78FF"; //蓝色
                         html.append("<span style='color:").append(color).append(";'>").append(esc.apply(prefix)).append("</span> ");
                     }
                     html.append(contentHtml.toString());
@@ -249,9 +248,9 @@ public class ConstraintVisualizer {
         JScrollPane scroll = new JScrollPane(tree);
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setLeftComponent(scroll);
-        // 右侧容器：顶部为 ruleLabel，中心为 graphPanel
+        // 右侧容器：顶部为 idLabel，中心为 graphPanel
         JPanel rightPanel = new JPanel(new BorderLayout());
-        rightPanel.add(ruleLabel, BorderLayout.NORTH);
+        rightPanel.add(idLabel, BorderLayout.NORTH);
         rightPanel.add(graphPanel, BorderLayout.CENTER);
         splitPane.setRightComponent(rightPanel);
         splitPane.setResizeWeight(0.5);
@@ -295,16 +294,16 @@ public class ConstraintVisualizer {
         moveItem.addActionListener(new MoveNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         swapSubtreeItem.addActionListener(new SwapSubtreeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         swapNodeItem.addActionListener(new SwapNodeAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
-        copySingleItem.addActionListener(new action.CopySingleAction(frame, tree, root, logicRoot));
-        copySubtreeItem.addActionListener(new action.CopySubtreeAction(frame, tree, root, logicRoot));
+        copySingleItem.addActionListener(new action.CopySingleAction(frame, tree, root, logicRoot, graphPanel));
+        copySubtreeItem.addActionListener(new action.CopySubtreeAction(frame, tree, root, logicRoot, graphPanel));
         pasteItem.addActionListener(new action.PasteAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status, logic.LogicValidator.errorNodeMap));
         renameVarItem.addActionListener(new action.RenameVarAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
         editCommentsItem.addActionListener(new action.EditCommentsAction(frame, tree, root, logicRoot, graphPanel, status, logic.LogicValidator.errorNodeMap));
 
         // 新增视图菜单，包含展开/收起操作
         JMenu viewMenu = new JMenu("视图");
-        JMenuItem expandItem = new JMenuItem("展开");
-        JMenuItem collapseItem = new JMenuItem("收起");
+        JMenuItem expandItem = new JMenuItem("全展开");
+        JMenuItem collapseItem = new JMenuItem("全收起");
         viewMenu.add(expandItem); viewMenu.add(collapseItem);
         bar.add(viewMenu);
         // 在视图菜单右侧添加一个撤销按钮，便于快速访问
@@ -437,29 +436,35 @@ public class ConstraintVisualizer {
                         int targetOffsetY = (int)(viewH/2 - cy * graphPanel.getScale());
                         graphPanel.setOffset(targetOffsetX, targetOffsetY);
                     }
-                    // 更新 ruleLabel：若当前有高亮且其 ruleId>0，则尝试查找该 rule 下 localId==1 的节点，未找到则显示 null；
-                    // 若无高亮，则显示 null
-                    Integer displayedRuleId = null;
+                    // 更新 idLabel：显示当前高亮节点所属 rule 下的 ID 节点的 content（若存在）
                     Integer hid = graphPanel.getHighlightNodeId();
                     if (hid != null) {
                         LogicNode highlighted = logic.LogicUiUtil.findNodeById(logicRoot[0], hid);
                         if (highlighted != null) {
-                            LogicNode firstInRule = logic.LogicUiUtil.findNodeByRuleAndLocal(logicRoot[0], highlighted.ruleId, 1);
-                            if (firstInRule != null) displayedRuleId = highlighted.ruleId;
-                            else displayedRuleId = null;
+                            LogicNode ruleNode = logic.LogicUiUtil.findRuleForNode(logicRoot[0], highlighted.nodeId);
+                            if (ruleNode != null) {
+                                LogicNode idNode = null;
+                                for (LogicNode c : ruleNode.children) if (c.type == LogicNode.NodeType.ID) { idNode = c; break; }
+                                if (idNode != null && idNode.content != null) idLabel.setText("ID: " + idNode.content);
+                                else idLabel.setText("ID: null");
+                            } else {
+                                idLabel.setText("ID: null");
+                            }
+                        } else {
+                            idLabel.setText("ID: null");
                         }
+                    } else {
+                        idLabel.setText("ID: null");
                     }
-                    if (displayedRuleId == null) ruleLabel.setText("ruleId: null");
-                    else ruleLabel.setText("ruleId: (" + displayedRuleId + ")");
                 } else {
                     graphPanel.setHighlightNodeId(null);
-                    // 无选中时也更新 label（同上分支）
-                    ruleLabel.setText("ruleId: null");
+                    // 无选中时也更新 idLabel（同上分支）
+                    idLabel.setText("ID: null");
                 }
             } else {
                 graphPanel.setHighlightNodeId(null);
-                // 无选中时也更新 label（同上分支）
-                ruleLabel.setText("ruleId: null");
+                // 无选中时也更新 idLabel（同上分支）
+                idLabel.setText("ID: null");
             }
         });
         open.addActionListener(new OpenXmlAction(frame, tree, root, logicRoot, nodeIdCounter, graphPanel, status));
@@ -497,9 +502,17 @@ public class ConstraintVisualizer {
             logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);
             ((DefaultTreeModel)tree.getModel()).reload();
             graphPanel.setLogicRoot(logicRoot[0]);
-            // 初始时更新 ruleLabel：若存在第一个 rule 的 localId==1 则显示其 ruleId，否则 null
-            LogicNode firstRuleFirst = logic.LogicUiUtil.findNodeByRuleAndLocal(logicRoot[0], 1, 1);
-            if (firstRuleFirst != null) ruleLabel.setText("ruleId: (1)"); else ruleLabel.setText("ruleId: null");
+            // 初始时更新 idLabel：若存在第一个 rule 且其包含 ID 节点则显示该 ID 的 content，否则 null
+            LogicNode firstRule = null;
+            for (LogicNode c : logicRoot[0].children) { if (c.type == LogicNode.NodeType.RULE) { firstRule = c; break; } }
+            if (firstRule != null) {
+                LogicNode idNode = null;
+                for (LogicNode c : firstRule.children) if (c.type == LogicNode.NodeType.ID) { idNode = c; break; }
+                if (idNode != null && idNode.content != null) idLabel.setText("ID: " + idNode.content);
+                else idLabel.setText("ID: null");
+            } else {
+                idLabel.setText("ID: null");
+            }
             status.setText("已预加载空约束公式");
         } catch (Exception ex) {
             status.setText("预加载XML失败: "+ex.getMessage());

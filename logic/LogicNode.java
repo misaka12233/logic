@@ -6,6 +6,8 @@ public class LogicNode {
     // rule 层级编号与节点在 rule 内的局部编号（用于展示）
     public int ruleId = 0;
     public int localId = 0;
+    // 新增：ID 类型节点的内容字段（对应 XML 中的内容）
+    public String content = null;
     public NodeType type;
     public Map<String, String> params = new LinkedHashMap<>();
     public List<Map<String,String>> paramList = new ArrayList<>();
@@ -20,7 +22,7 @@ public class LogicNode {
     public boolean showComments = false;
     // 对于未知类型节点，记录原始标签与内容以便可视化与编辑
     public String unknownTag = null;
-    public String unknownContent = null;
+    // 使用统一的 content 字段保存节点文本内容（包括 ID 和 UNKNOWN 节点的文本）
 
     public String getCommentsAsHtml() {
         if (comments==null || comments.isEmpty()) return "";
@@ -45,14 +47,19 @@ public class LogicNode {
                 break;
             case BFUNC:
                 label = params.getOrDefault("name", "bfunc") + paramListStr(); break;
+            case GROUP_BY:
+                label = "group by: " + ((content == null) ? "" : content); break;
+            case ID:
+                // ID 类型仅显示其 content
+                label = "id: " + ((content == null) ? "" : content); break;
             case AND: case OR: case IMPLIES: case NOT: case FORMULA: case RULE: case RULES:
                 label = type.name().toLowerCase(); break;
             default:
                 // 若解析时记录了原始标签与内容，则可视化显示这些信息
                 if (unknownTag != null && !unknownTag.isEmpty()) {
-                    String content = unknownContent == null ? "" : unknownContent;
+                    String uc = content == null ? "" : content;
                     // 截断过长内容以免树标签过长
-                    String display = content.length() > 60 ? content.substring(0, 57) + "..." : content;
+                    String display = uc.length() > 60 ? uc.substring(0, 57) + "..." : uc;
                     label = unknownTag + ": " + display;
                 } else {
                     label = "unknown";
@@ -60,11 +67,12 @@ public class LogicNode {
                 break;
         }
         String prefix = "";
+        // 不再展示 ruleId；保留对一般节点的局部编号显示（localId）以便定位
         if (type == NodeType.RULES) {
             prefix = ""; // rules 节点不显示编号
-        } else if (type == NodeType.RULE || type == NodeType.UNKNOWN) {
-            // RULE 与 UNKNOWN 节点显示 ruleId（例如 (1)），UNKNOWN 不参与 localId 计数
-            prefix = "(" + ruleId + ") ";
+        } else if (type == NodeType.RULE || type == NodeType.UNKNOWN || type == NodeType.ID || type == NodeType.GROUP_BY) {
+            // RULE 与 UNKNOWN 不显示 ruleId 前缀
+            prefix = "";
         } else {
             prefix = "[" + localId + "] ";
         }
@@ -99,5 +107,5 @@ public class LogicNode {
         return sb.toString();
     }
 
-    public enum NodeType { RULES, RULE, FORALL, EXISTS, AND, OR, IMPLIES, NOT, BFUNC, FORMULA, UNKNOWN }
+    public enum NodeType { RULES, RULE, FORALL, EXISTS, AND, OR, IMPLIES, NOT, BFUNC, FORMULA, GROUP_BY, ID, UNKNOWN }
 }

@@ -43,7 +43,8 @@ public class PasteAction implements ActionListener {
         LogicNode inst = NodeCopyUtil.instantiateFromTemplate(logic.CopyBuffer.template, nodeIdCounter);
         // 保存快照以支持撤销
         logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
-        parent.children.add(inst);
+        // 插入为第一个子节点
+        parent.children.add(0, inst);
         java.util.List<Integer> expandedIds = logic.SwingTreeUtil.collectExpandedIds(tree, root);
         Integer selectedId = logic.SwingTreeUtil.findSelectedNodeId(tree);
         logic.SwingTreeUtil.buildSwingTree(logicRoot[0], root);

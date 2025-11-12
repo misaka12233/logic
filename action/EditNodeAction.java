@@ -213,6 +213,7 @@ public class EditNodeAction implements ActionListener {
         java.util.List<java.util.Map<String,String>> paramList = new java.util.ArrayList<>();
         Map<String,String> filter = new LinkedHashMap<>();
         java.util.List<java.util.Map<String,String>> filterParamList = new java.util.ArrayList<>();
+        String newContent = null;
         switch(type) {
             case FORALL: case EXISTS: {
                 String v = JOptionPane.showInputDialog(frame,"变量名(var):", ln.params.getOrDefault("var","") );
@@ -276,12 +277,19 @@ public class EditNodeAction implements ActionListener {
                 }
                 break;
             }
+            case ID: case GROUP_BY: {
+                String old = ln.content == null ? "" : ln.content;
+                String prompt = (type == LogicNode.NodeType.ID) ? "输入 ID 内容(content):" : "输入 GROUP_BY 内容(content):";
+                String content = JOptionPane.showInputDialog(frame, prompt, old);
+                if (content == null) return; // 取消
+                newContent = content;
+                break;
+            }
             default:
         }
-        // 保存快照以支持撤销（包含 UI 展开/选中状态）
         logic.UndoManager.saveSnapshot(logicRoot[0], tree, root);
-        // apply changes
         ln.type = type;
+        ln.content = newContent;
         ln.params.clear(); ln.params.putAll(params);
         ln.paramList.clear(); ln.paramList.addAll(paramList);
         ln.filter.clear(); ln.filter.putAll(filter);

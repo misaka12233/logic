@@ -62,8 +62,11 @@ public class UndoAction implements java.awt.event.ActionListener {
             javax.swing.SwingUtilities.invokeLater(() -> {
                 logic.SwingTreeUtil.applyUiState(tree, root, expanded, selFinal);
             });
+            Object sv = ui.get("saved");
+            if (sv instanceof Boolean) UndoManager.setSaved((Boolean)sv);
             status.setText("已撤销到上一个快照");
-            UndoManager.setUndoAvailableAndNotify(false);
+            // 根据当前缓冲区剩余快照数决定是否仍可撤销
+            UndoManager.setUndoAvailableAndNotify(UndoManager.isUndoAvailable());
         } catch (Exception ex) {
             status.setText("撤销失败: " + ex.getMessage());
         }

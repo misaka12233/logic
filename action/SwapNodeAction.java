@@ -97,13 +97,13 @@ public class SwapNodeAction implements ActionListener {
         java.util.List<String> tmpComments = new java.util.ArrayList<>(fromNode.comments);
         fromNode.comments.clear(); fromNode.comments.addAll(toNode.comments);
         toNode.comments.clear(); toNode.comments.addAll(tmpComments);
-        // 交换 unknownTag/unknownContent（若存在）
+        // 交换 unknownTag 与文本内容（使用统一的 content 字段）
         String tmpUnknownTag = fromNode.unknownTag;
-        String tmpUnknownContent = fromNode.unknownContent;
+        String tmpContent = fromNode.content;
         fromNode.unknownTag = toNode.unknownTag;
-        fromNode.unknownContent = toNode.unknownContent;
+        fromNode.content = toNode.content;
         toNode.unknownTag = tmpUnknownTag;
-        toNode.unknownContent = tmpUnknownContent;
+        toNode.content = tmpContent;
         // 交换 showComments 标志
         boolean tmpShow = fromNode.showComments;
         fromNode.showComments = toNode.showComments;
