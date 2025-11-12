@@ -1,5 +1,6 @@
 package logic;
 
+import javax.swing.JTree;
 import javax.swing.tree.*;
 import java.util.*;
 
@@ -66,5 +67,25 @@ public class TreeHelper {
             cur = next.get();
         }
         return cur;
+    }
+
+    // 递归展开子树（辅助方法，避免在 main 中使用泛型数组/递归 lambda）
+    public static void expandSubtree(JTree tree, DefaultMutableTreeNode node) {
+        TreePath path = new TreePath(node.getPath());
+        tree.expandPath(path);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            javax.swing.tree.TreeNode tn = node.getChildAt(i);
+            if (tn instanceof DefaultMutableTreeNode) expandSubtree(tree, (DefaultMutableTreeNode) tn);
+        }
+    }
+
+    // 递归收起子树（先收起子孙，再收起自身）
+    public static void collapseSubtree(JTree tree, DefaultMutableTreeNode node) {
+        for (int i = 0; i < node.getChildCount(); i++) {
+            javax.swing.tree.TreeNode tn = node.getChildAt(i);
+            if (tn instanceof DefaultMutableTreeNode) collapseSubtree(tree, (DefaultMutableTreeNode) tn);
+        }
+        TreePath path = new TreePath(node.getPath());
+        tree.collapsePath(path);
     }
 }

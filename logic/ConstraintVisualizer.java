@@ -16,41 +16,6 @@ import action.*;
  * - 节点数据结构区分类型、参数、子节点
  */
 public class ConstraintVisualizer {
-
-    /**
-     * 深拷贝LogicNode子树（不复用nodeId，分配新id）
-     */
-    static LogicNode deepCopyNode(LogicNode node) {
-        LogicNode n = new LogicNode(node.type, nodeIdCounter[0]++);
-        n.params.putAll(node.params);
-        for (java.util.Map<String,String> p : node.paramList) n.paramList.add(new java.util.LinkedHashMap<>(p));
-        n.filter.putAll(node.filter);
-        for (java.util.Map<String,String> p : node.filterParamList) n.filterParamList.add(new java.util.LinkedHashMap<>(p));
-        for (LogicNode c : node.children) n.children.add(deepCopyNode(c));
-        return n;
-    }
-
-    // 递归展开子树（辅助方法，避免在 main 中使用泛型数组/递归 lambda）
-    public static void expandSubtree(JTree tree, DefaultMutableTreeNode node) {
-        TreePath path = new TreePath(node.getPath());
-        tree.expandPath(path);
-        for (int i = 0; i < node.getChildCount(); i++) {
-            javax.swing.tree.TreeNode tn = node.getChildAt(i);
-            if (tn instanceof DefaultMutableTreeNode) expandSubtree(tree, (DefaultMutableTreeNode) tn);
-        }
-    }
-
-    // 递归收起子树（先收起子孙，再收起自身）
-    public static void collapseSubtree(JTree tree, DefaultMutableTreeNode node) {
-        for (int i = 0; i < node.getChildCount(); i++) {
-            javax.swing.tree.TreeNode tn = node.getChildAt(i);
-            if (tn instanceof DefaultMutableTreeNode) collapseSubtree(tree, (DefaultMutableTreeNode) tn);
-        }
-        TreePath path = new TreePath(node.getPath());
-        tree.collapsePath(path);
-    }
-
-
     // 自定义渲染器
     static class ErrorHighlightTreeCellRenderer extends DefaultTreeCellRenderer {
         LogicNode logicRoot;
@@ -96,8 +61,8 @@ public class ConstraintVisualizer {
         tree.setFont(new Font("SansSerif", Font.PLAIN, 18));
         // 右侧有向图可视化面板
         LogicGraphPanel graphPanel = new LogicGraphPanel();
-    // 在图上方显示当前 Rule 的 ID 节点 content（只读标签）
-    JLabel idLabel = new JLabel("ID: null");
+        // 在图上方显示当前 Rule 的 ID 节点 content（只读标签）
+        JLabel idLabel = new JLabel("ID: null");
         // 点击JTree空白处取消选中；同时支持点击注释角标切换注释显示
         tree.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -269,6 +234,8 @@ public class ConstraintVisualizer {
         // 编辑菜单
         JMenu editMenu = new JMenu("编辑");
         bar.add(editMenu);
+        // 初始无选中，编辑菜单禁用
+        editMenu.setEnabled(false);
         frame.setJMenuBar(bar);
 
         // 编辑菜单添加所有节点操作
@@ -306,6 +273,8 @@ public class ConstraintVisualizer {
         JMenuItem collapseItem = new JMenuItem("全收起");
         viewMenu.add(expandItem); viewMenu.add(collapseItem);
         bar.add(viewMenu);
+        // 初始无选中，视图菜单禁用
+        viewMenu.setEnabled(false);
         // 在视图菜单右侧添加一个撤销按钮，便于快速访问
         java.awt.event.ActionListener undoListener = new action.UndoAction(tree, root, logicRoot, nodeIdCounter, graphPanel, status);
         JButton undoButton = new JButton("撤销");
@@ -362,13 +331,13 @@ public class ConstraintVisualizer {
             TreePath path = tree.getSelectionPath();
             if (path == null) return;
             DefaultMutableTreeNode sel = (DefaultMutableTreeNode) path.getLastPathComponent();
-            ConstraintVisualizer.expandSubtree(tree, sel);
+            TreeHelper.expandSubtree(tree, sel);
         });
         collapseItem.addActionListener(e -> {
             TreePath path = tree.getSelectionPath();
             if (path == null) return;
             DefaultMutableTreeNode sel = (DefaultMutableTreeNode) path.getLastPathComponent();
-            ConstraintVisualizer.collapseSubtree(tree, sel);
+            TreeHelper.collapseSubtree(tree, sel);
         });
 
         // 构建节点右键菜单：包含编辑菜单和视图菜单中的操作
@@ -392,6 +361,13 @@ public class ConstraintVisualizer {
                 if (path != null && selRow != -1) {
                     // 选中被右击的节点
                     tree.setSelectionPath(path);
+                    // 在显示弹出菜单前，同步各项的 enabled 状态（与原菜单项保持一致）
+                    for (int i=0;i<popupItems.size() && i<nodePopup.getComponentCount();i++) {
+                        java.awt.Component comp = nodePopup.getComponent(i);
+                        if (comp instanceof JMenuItem) {
+                            ((JMenuItem)comp).setEnabled(popupItems.get(i).isEnabled());
+                        }
+                    }
                     // 在该位置显示弹出菜单
                     nodePopup.show(tree, e.getX(), e.getY());
                 }
@@ -406,9 +382,13 @@ public class ConstraintVisualizer {
             }
         });
 
-        // 选中树节点时高亮右侧图节点
+        // 选中树节点时高亮右侧图节点，并根据选中节点启用/禁用菜单项
         tree.addTreeSelectionListener(e -> {
             TreePath path = tree.getSelectionPath();
+            // 默认：无选中时禁用 编辑/视图 菜单
+            boolean hasSelection = (path != null && logicRoot[0] != null);
+            editMenu.setEnabled(hasSelection);
+            viewMenu.setEnabled(hasSelection);
             if (path != null && logicRoot[0] != null) {
                 DefaultMutableTreeNode sel = (DefaultMutableTreeNode)path.getLastPathComponent();
                 LogicNode ln = TreeHelper.findNode(logicRoot[0], sel, root);
@@ -416,16 +396,13 @@ public class ConstraintVisualizer {
                     graphPanel.setHighlightNodeId(ln.nodeId);
                     // 设置缩放倍率为 1.5 并同步重绘（确保 nodeBounds 在新 scale 下已更新），然后居中选中节点
                     graphPanel.setScale(1.5);
-                    // 强制立刻绘制以便 nodeBounds 在后续计算中是最新的（避免 repaint 异步导致使用旧布局）
                     try {
-                        // 只有在组件大小可用时才同步绘制
                         if (graphPanel.getWidth() > 0 && graphPanel.getHeight() > 0) {
                             graphPanel.paintImmediately(0, 0, graphPanel.getWidth(), graphPanel.getHeight());
                         }
                     } catch (Exception ex) {
-                        // paintImmediately 在极少数情况下可能抛出异常，忽略以防止影响主流程
+                        // ignore
                     }
-                    // 平移图片中心到该节点（使用最新的 scale）
                     Rectangle rect = graphPanel.getNodeBounds(ln.nodeId);
                     if (rect != null) {
                         int cx = rect.x + rect.width/2;
@@ -436,7 +413,7 @@ public class ConstraintVisualizer {
                         int targetOffsetY = (int)(viewH/2 - cy * graphPanel.getScale());
                         graphPanel.setOffset(targetOffsetX, targetOffsetY);
                     }
-                    // 更新 idLabel：显示当前高亮节点所属 rule 下的 ID 节点的 content（若存在）
+                    // 更新 idLabel
                     Integer hid = graphPanel.getHighlightNodeId();
                     if (hid != null) {
                         LogicNode highlighted = logic.LogicUiUtil.findNodeById(logicRoot[0], hid);
@@ -456,14 +433,47 @@ public class ConstraintVisualizer {
                     } else {
                         idLabel.setText("ID: null");
                     }
+
+                    // 根据选中节点类型控制菜单项可用性
+                    // 默认全部启用，然后按规则关闭特定操作
+                    editItem.setEnabled(true);
+                    delItem.setEnabled(true);
+                    moveItem.setEnabled(true);
+                    swapSubtreeItem.setEnabled(true);
+                    swapNodeItem.setEnabled(true);
+                    copySingleItem.setEnabled(true);
+                    copySubtreeItem.setEnabled(true);
+                    renameVarItem.setEnabled(true);
+                    // 若选中类型为 RULES：禁止 编辑/删除/复制/移动/交换/重命名变量
+                    if (ln.type == LogicNode.NodeType.RULES) {
+                        editItem.setEnabled(false);
+                        delItem.setEnabled(false);
+                        moveItem.setEnabled(false);
+                        swapSubtreeItem.setEnabled(false);
+                        swapNodeItem.setEnabled(false);
+                        copySingleItem.setEnabled(false);
+                        copySubtreeItem.setEnabled(false);
+                        renameVarItem.setEnabled(false);
+                    }
+                    // 若选中类型为 RULE/ID/GROUP_BY/UNKNOWN：禁止移动与交换
+                    if (ln.type == LogicNode.NodeType.RULE || ln.type == LogicNode.NodeType.ID || ln.type == LogicNode.NodeType.GROUP_BY || ln.type == LogicNode.NodeType.UNKNOWN) {
+                        moveItem.setEnabled(false);
+                        swapSubtreeItem.setEnabled(false);
+                        swapNodeItem.setEnabled(false);
+                    }
+                    // 变量重命名仅在 FORALL/EXISTS 可用
+                    if (!(ln.type == LogicNode.NodeType.FORALL || ln.type == LogicNode.NodeType.EXISTS)) {
+                        renameVarItem.setEnabled(false);
+                    }
                 } else {
                     graphPanel.setHighlightNodeId(null);
-                    // 无选中时也更新 idLabel（同上分支）
                     idLabel.setText("ID: null");
+                    // 没有找到对应逻辑节点：禁用编辑/视图菜单
+                    editMenu.setEnabled(false);
+                    viewMenu.setEnabled(false);
                 }
             } else {
                 graphPanel.setHighlightNodeId(null);
-                // 无选中时也更新 idLabel（同上分支）
                 idLabel.setText("ID: null");
             }
         });
