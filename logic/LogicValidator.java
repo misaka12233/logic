@@ -68,6 +68,16 @@ public class LogicValidator {
                         String msg = "GROUP_BY 节点缺少 content";
                         if (prev == null) errorNodeMap.put(node.nodeId, msg);
                         else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                    } else {
+                        String c = node.content.trim();
+                        java.util.Set<String> allowed = new java.util.HashSet<>();
+                        allowed.add("project"); allowed.add("folder"); allowed.add("file");
+                        if (!allowed.contains(c)) {
+                            String prev = errorNodeMap.get(node.nodeId);
+                            String msg = "GROUP_BY content 非法: 必须是 project|folder|file";
+                            if (prev == null) errorNodeMap.put(node.nodeId, msg);
+                            else errorNodeMap.put(node.nodeId, prev + "; " + msg);
+                        }
                     }
                 }
 

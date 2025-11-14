@@ -51,6 +51,8 @@ public class ConstraintVisualizer {
             config[0] = ConfigXmlLoader.loadFromFile("config.xml");
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(null, "读取config.xml失败："+ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+            // 配置文件格式或读取失败属于致命错误，直接退出程序以避免后续异常行为
+            System.exit(1);
         }
         JFrame frame = new JFrame("约束描述语言可视化");
         // 我们自己处理关闭事件以便提示未保存状态并删除临时文件

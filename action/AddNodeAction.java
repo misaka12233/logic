@@ -104,11 +104,17 @@ public class AddNodeAction implements ActionListener {
                 }
                 break;
             }
-            case ID: case GROUP_BY: {
-                String prompt = (type == LogicNode.NodeType.ID) ? "输入 ID 内容(content):" : "输入 GROUP_BY 内容(content):";
-                String content = JOptionPane.showInputDialog(frame, prompt);
+            case ID: {
+                String content = JOptionPane.showInputDialog(frame, "输入 ID 内容(content):");
                 if (content == null) return; // 用户取消
                 newContent = content;
+                break;
+            }
+            case GROUP_BY: {
+                String[] opts = new String[] { "project", "folder", "file" };
+                String gbChoice = (String)JOptionPane.showInputDialog(frame, "选择 GROUP_BY 类型:", "GROUP_BY", JOptionPane.PLAIN_MESSAGE, null, opts, opts[0]);
+                if (gbChoice == null) return; // 取消
+                newContent = gbChoice;
                 break;
             }
             default:

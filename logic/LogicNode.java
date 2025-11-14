@@ -51,7 +51,7 @@ public class LogicNode {
                 label = "group by: " + ((content == null) ? "" : content); break;
             case ID:
                 // ID 类型仅显示其 content
-                label = "id: " + ((content == null) ? "" : content); break;
+                label = "ID: " + ((content == null) ? "" : content); break;
             case AND: case OR: case IMPLIES: case NOT: case FORMULA: case RULE: case RULES:
                 label = type.name().toLowerCase(); break;
             default:
